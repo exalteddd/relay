@@ -60,6 +60,12 @@ GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
 GITHUB_USER = "https://api.github.com/user"
 
 app = Flask(__name__, static_folder=None)
+# Render terminates TLS and forwards over http, so without this Flask believes
+# it is serving http:// while the browser says https://. That mismatch breaks
+# the origin check on every POST and makes the OAuth callback URL wrong.
+if os.environ.get("RELAY_TRUST_PROXY", "1") != "0":
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # --- configuration ------------------------------------------------------
 # In production a missing SESSION_SECRET is fatal: falling back to a random
@@ -114,13 +120,24 @@ _run_holder = {"user": None, "started": 0.0}
 
 @app.before_request
 def check_request_origin():
-    # Cookies alone do not protect same-site requests from hostile sibling sites.
-    if request.method == "POST":
-        origin = request.headers.get("Origin")
-        if request.headers.get("Sec-Fetch-Site") == "cross-site" or (
-            origin and origin != request.host_url.rstrip("/")
-        ):
-            abort(403)
+    """Reject cross-site POSTs. Cookies alone do not stop a hostile sibling.
+
+    Compared on host rather than full origin: behind a TLS-terminating proxy
+    the scheme Flask sees need not match the one the browser sent, and a
+    scheme mismatch is not a cross-site request. Refusals answer in JSON, so a
+    caller expecting JSON gets a readable reason instead of an HTML page it
+    cannot parse.
+    """
+    if request.method != "POST":
+        return None
+    if request.headers.get("Sec-Fetch-Site") == "cross-site":
+        return jsonify(error="Cross-site requests are not accepted"), 403
+    origin = request.headers.get("Origin")
+    if origin:
+        from urllib.parse import urlsplit
+        if urlsplit(origin).netloc != urlsplit(request.host_url).netloc:
+            return jsonify(error="Request origin does not match this server"), 403
+    return None
 
 
 @app.after_request

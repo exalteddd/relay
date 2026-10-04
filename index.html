@@ -911,7 +911,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
             <button class="plus-btn" id="cmdPlus" title="Add a node" aria-label="Add a node" aria-haspopup="menu">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
-            <input id="cmdInput" placeholder="What is this project asking?" autocomplete="off" aria-label="This project's research question">
+            <input id="cmdInput" placeholder="Ask a research question and run it…" autocomplete="off" aria-label="This project's research question">
             <button class="send-btn" id="cmdSend" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             </button>
@@ -1248,7 +1248,6 @@ function applyLocalPrefs(p,withGraph){
   // to show, so the mode falls back rather than naming a source it lost.
   if(p.dataMode) state.dataMode=(p.dataMode==="live"&&!CHART_DATA.live)?"verified":p.dataMode;
   if(p.theme) state.theme=p.theme;
-  if(p.project && state.projects[p.project]) state.project=p.project;
   if(p.view) state.view=p.view;
   if(p.previews) state.previews=p.previews;
   if(typeof p.editing==="boolean") state.editing=p.editing;
@@ -1263,8 +1262,6 @@ function applyLocalPrefs(p,withGraph){
       for(const n of state.projects[pid].nodes){ const o=p.pos[pid][n.id]; if(o){n.x=o.x;n.y=o.y;} }
     }
   }
-  if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
-  if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
   // Projects the user made are stored whole, since there is no base to diff.
   if(p.userProjects){
     for(const up of p.userProjects){ state.projects[up.id]=up; if(!PROJECT_ORDER.includes(up.id)) PROJECT_ORDER.push(up.id); }
@@ -1273,6 +1270,19 @@ function applyLocalPrefs(p,withGraph){
     for(const id of p.deletedProjects){ delete state.projects[id]; PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id); }
     state.deletedProjects=p.deletedProjects.slice();
   }
+  // Only built-in projects carry a diff, and a node already present is not
+  // added twice -- together these are what stop a graph doubling on reload.
+  if(p.extraNodes){ for(const pid in p.extraNodes){
+    const proj=state.projects[pid]; if(!proj||!BASE[pid]) continue;   // whole-saved projects already have theirs
+    const have=new Set(proj.nodes.map(n=>n.id));
+    for(const n of p.extraNodes[pid]) if(!have.has(n.id)){ proj.nodes.push(n); have.add(n.id); }
+  } }
+  if(p.extraEdges){ for(const pid in p.extraEdges){
+    const proj=state.projects[pid]; if(!proj||!BASE[pid]) continue;
+    const have=new Set(proj.edges.map(e=>e.from+">"+e.to));
+    for(const e of p.extraEdges[pid]) if(!have.has(e.from+">"+e.to)){ proj.edges.push(e); have.add(e.from+">"+e.to); }
+  } }
+  if(p.project && state.projects[p.project]) state.project=p.project;
   if(!state.projects[state.project]) state.project=PROJECT_ORDER[0];
 }
 /* Every mutation in the app already calls savePersist(), so this is the single
@@ -1322,8 +1332,16 @@ function saveLocalPrefs(){
       const pos={}, extraNodes={}, extraEdges={};
       for(const pid in state.projects){
         pos[pid]={};
+        for(const n of state.projects[pid].nodes) pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
+      }
+      for(const pid in state.projects){
         const base=BASE[pid];
-        const baseIds=base?new Set(base.nodes.map(n=>n.id)):new Set();
+        // A user-made project is stored whole under userProjects. Diffing it
+        // against a base it does not have put every node into extraNodes as
+        // well, and load applied both -- so the graph doubled on every
+        // reload. Only built-in projects carry a diff.
+        if(!base) continue;
+        const baseIds=new Set(base.nodes.map(n=>n.id));
         for(const n of state.projects[pid].nodes){
           pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
           if(!baseIds.has(n.id)){ (extraNodes[pid]=extraNodes[pid]||[]).push(n); }
@@ -2328,23 +2346,34 @@ function syncQuestionBar(){
   const q=questionNode();
   inp.value = q ? (q.meta.objective||q.summary||q.title||"") : (state.question||"");
 }
-function sendCmd(){
+async function sendCmd(){
   const inp=$("#cmdInput"); const t=inp.value.trim();
-  if(!t){ toast("Type the question this project is asking"); return; }
+  if(!t){ toast("Type a research question"); return; }
+  // Asking is the whole gesture: the question is recorded on the graph and
+  // the run it implies is offered straight away. Previously this only edited
+  // a field, which is not what "ask" means.
   state.question=t;
   let q=questionNode();
-  if(q){
-    q.meta=Object.assign({},q.meta,{objective:t});
-    q.summary=t; q.title="Research question";
-    toast("Question updated");
-  }else{
+  if(q){ q.meta=Object.assign({},q.meta,{objective:t}); q.summary=t; q.title="Research question"; }
+  else{
     q=P("q-"+Math.random().toString(36).slice(2,6),"question","Research question",t,"done",0,0,{objective:t});
     q.origin="user"; curProj().nodes.push(q);
-    toast("Question added to the graph");
   }
   renderGraph();
   if(state.selection===q.id){ renderPaneHeader(q); renderPaneBody(q); }
   renderCmdCtx(); savePersist();
+
+  if(state.run.active){ toast("Question updated — it applies to the next run"); return; }
+
+  // The question decides the engine; the approval dialog is still the gate.
+  let mode="literature", why="";
+  try{
+    const r=await api("/api/resolve?q="+encodeURIComponent(t));
+    if(r.ok){ const j=await r.json(); mode=j.mode; why=j.why||""; }
+  }catch(e){}
+  const expId=curProj().primaryExp;
+  if(mode==="screen"&&expId&&nodeById(expId)) openRunModal(expId);
+  else openResearchModal(why);
 }
 $("#cmdSend").addEventListener("click",sendCmd);
 $("#cmdPlus").addEventListener("click",e=>{ e.stopPropagation(); openAddNodeMenu($("#cmdPlus")); });
@@ -2914,7 +2943,7 @@ function updateProvenance(){
   if(!projectHasData()){
     el.provenance.dataset.kind="none";
     el.provText.textContent="No results yet";
-    el.provTextLong.textContent="· run an experiment to produce some";
+    el.provTextLong.textContent="";
     return;
   }
   // Once a run has happened the displayed data is measured, so the badge must
@@ -2923,7 +2952,7 @@ function updateProvenance(){
   el.provenance.dataset.kind = state.run.active
     ? (state.run.mode==="live"?"live":"replay")
     : (showingMeasured?"live":"sample");
-  if(state.run.active){ el.provText.textContent = state.run.mode==="live"?"Live Omnigent run":"Replaying trace"; el.provTextLong.textContent=""; }
+  if(state.run.active){ el.provText.textContent="Running"; el.provTextLong.textContent=""; }
   else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent=d?("· "+d.tag):""; }
 }
 /* One add-node menu, opened from the toolbar or the plus in the ask bar. */
@@ -2992,8 +3021,15 @@ function wireSharpen(root,field){
     try{
       const r=await api("/api/refine-question",{method:"POST",
         headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})});
-      const j=await r.json();
-      if(!r.ok){ out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(j.error||"Could not sharpen this")}</div></div>`; return; }
+      // Report what actually happened. A single catch-all message sent
+      // people hunting for a network fault when the server had answered.
+      let j=null, raw="";
+      try{ j=await r.clone().json(); }catch(e){ raw=(await r.text()).slice(0,120); }
+      if(!r.ok||!j){
+        const why=(j&&j.error) || raw || `${r.status} ${r.statusText}`;
+        out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(why)}</div></div>`;
+        return;
+      }
       out.innerHTML=`
         <div class="sharpen">
           ${j.tooBroad?`<div class="sharpen-flag">This is broad enough that no single run could answer it.</div>`:""}
@@ -3010,7 +3046,7 @@ function wireSharpen(root,field){
       });
       out.querySelector("#keepMine").addEventListener("click",()=>{ out.hidden=true; out.innerHTML=""; });
     }catch(e){
-      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Could not reach the model.</div></div>`;
+      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">The request never completed: ${esc(e.message||String(e))}. Is the server still running?</div></div>`;
     }finally{ btn.disabled=false; btn.textContent="Sharpen with AI"; }
   });
 }
@@ -3312,15 +3348,16 @@ async function startRun(expId){
   state.run.active=true; state.run.log=[]; state.run.id++;
   const runId="r-"+String(state.run.id).padStart(2,"0");
   const live=await hasBackend();
-  state.run.mode=live?"live":"replay";
+  state.run.mode="live";
   updateProvenance();
-  el.runbar.hidden=false; $("#runTxt").textContent=live?"Live Omnigent run":"Replaying trace";
+  el.runbar.hidden=false; $("#runTxt").textContent="Running";
   $("#runSub").textContent="· "+runId;
   if(expId) setStatus(expId,"running");
   // open the result node's Activity tab so events stream where the user can watch
   const resId=curProj().resultNode;
   if(resId){ selectNode(resId); const rn=nodeById(resId); rn._tab="activity"; renderPaneBody(rn); }
-  if(live) runViaBackend(expId,runId); else runReplay(expId,runId);
+  if(live) runViaBackend(expId,runId);
+  else runUnavailable(expId,runId,"No server is reachable from this page, so there is nothing to run.");
 }
 /* ================================ auth ================================
    The sidebar chip reflects the real session. On a static host (no backend)
@@ -3440,30 +3477,14 @@ function finishRun(expId,runId,aborted){
   const sel=state.selection?nodeById(state.selection):null; if(sel&&sel.type==="result"){ renderPaneBody(sel); }
   if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
 }
-function runReplay(expId,runId){
-  const pid=curProj().id;
-  const steps = pid==="ndm1" ? [
-    [300, ()=>logEvent({agent:"Omnigent (PI)",msg:"Approved r-03 · dispatching sub-agents",st:"done"})],
-    [700, ()=>{logEvent({agent:"Literature",msg:"Scanning sources for NDM-1 inhibitor priors…",st:"running"}); runSub("literature");}],
-    [1700,()=>logEvent({agent:"Literature",msg:"12 sources scanned · 3 chelation-warhead claims grounded",st:"done"})],
-    [1900,()=>{logEvent({agent:"Extractor",msg:"Building labelled fixture (scaffold split)…",st:"running"}); runSub("extractor");}],
-    [2800,()=>{logEvent({agent:"Extractor",msg:"RDKit fingerprints + Bemis–Murcko scaffolds ready",st:"done"}); setStatus("hA","done"); setStatus("hB","done");}],
-    [3100,()=>{logEvent({agent:"Hypothesizer",msg:"Diversity-aware screen ranked above potency-only",st:"done"}); runSub("hypothesizer");}],
-    [3400,()=>{logEvent({agent:"Screener",msg:"Random-forest rank over candidate pool…",st:"running"}); runSub("screener");}],
-    [4600,()=>{logEvent({agent:"Screener",msg:"Enrichment 11.3× @ top 1% · 5 candidates advanced",st:"done"}); setStatus("rank","done"); pulse("rank");}],
-    [5000,()=>{logEvent({agent:"Critic",msg:"Controls clean · random 1.05× · y-scramble AUC 0.52",st:"done"}); runSub("critic");}],
-    [5600,()=>finishRun(expId,runId)]
-  ] : [
-    [300, ()=>logEvent({agent:"Omnigent (PI)",msg:`Approved ${runId} · dispatching sub-agents`,st:"done"})],
-    [800, ()=>logEvent({agent:"Literature",msg:"Gathering evidence…",st:"running"})],
-    [1700,()=>{logEvent({agent:"Literature",msg:"Evidence grounded",st:"done"}); nodeFirstHyp();}],
-    [2100,()=>logEvent({agent:"Screener",msg:"Ranking candidates…",st:"running"})],
-    [3300,()=>logEvent({agent:"Screener",msg:"Ranking complete",st:"done"})],
-    [3700,()=>{logEvent({agent:"Critic",msg:"Controls checked",st:"done"}); finishRun(expId,runId);}]
-  ];
-  state.run.timers.forEach(clearTimeout); state.run.timers=[];
-  const t0=Date.now();
-  for(const [dt,fn] of steps){ state.run.timers.push(setTimeout(()=>{ if(state.run.active||dt<100) fn(); updateRunSub(Date.now()-t0); },reduceMotion?Math.min(dt,400):dt)); }
+/* There is no replay. A recorded trace was theatre left over from the demo
+   build: it played fixed messages and fixed numbers whether or not anything
+   ran. If the backend cannot be reached, the honest outcome is to say so. */
+function runUnavailable(expId,runId,why){
+  logEvent({agent:"Relay",msg:why,st:"failed"});
+  if(expId) setStatus(expId,"planned");
+  finishRun(expId,runId,true);
+  toast(why);
 }
 function nodeFirstHyp(){ const h=curProj().nodes.find(n=>n.type==="hypothesis"); if(h)setStatus(h.id,"done"); }
 function runSub(name){ /* placeholder for sub-agent markers if needed */ }
@@ -3516,8 +3537,9 @@ async function runViaBackend(expId,runId){
       }
     }
     finishRun(expId,runId);
-  }catch(e){ // fall back to replay if the live stream drops
-    if(state.run.active){ logEvent({agent:"Relay",msg:"Live stream unavailable — replaying labelled trace",st:"failed"}); state.run.mode="replay"; updateProvenance(); $("#runTxt").textContent="Replaying trace"; runReplay(expId,runId); }
+  }catch(e){
+    // A dropped stream is a failed run, not a cue to play something canned.
+    if(state.run.active) runUnavailable(expId,runId,`The run stopped: ${e.message||e}`);
   }
 }
 function applyBackendEvent(ev,expId,runId){
