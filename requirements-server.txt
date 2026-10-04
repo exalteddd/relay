@@ -1,0 +1,7 @@
+# Backend only. The screening engine's own dependencies come from
+# `pip install -e .` (see pyproject.toml) plus rdkit and scikit-learn.
+flask>=3.0
+gunicorn>=21.2
+requests>=2.31
+rdkit>=2023.9
+scikit-learn>=1.3

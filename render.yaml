@@ -1,0 +1,30 @@
+# Render blueprint. Deploy with: New > Blueprint, pointed at this repo.
+#
+# No secret values appear here. `sync: false` means Render prompts for the
+# value once at deploy time and stores it encrypted; it is never in git.
+services:
+  - type: web
+    name: relay
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-server.txt && pip install -e .
+    # Threads (not extra workers) so the free tier's memory holds, while the
+    # SSE run stream and the health poll it races against can overlap.
+    # The timeout is generous because a real screen takes a while.
+    startCommand: gunicorn --threads 8 --timeout 300 --bind 0.0.0.0:$PORT server.app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: RELAY_ENV
+        value: prod
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SESSION_SECRET
+        generateValue: true      # Render generates and stores it
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: RELAY_ALLOWED_USERS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

@@ -14,3 +14,12 @@ Thumbs.db
 # Runtime output
 relay_data/trace.json
 *.log
+
+# Secrets — never commit real values
+.env
+.env.local
+*.pem
+
+# Server runtime
+medlab/relay_data/events.jsonl
+medlab/relay_data/ranked.json
