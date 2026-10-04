@@ -97,8 +97,25 @@ def current_user():
     return session.get("user")
 
 
+def dev_open_access() -> bool:
+    """Local development with no OAuth app set up yet.
+
+    Registering a GitHub OAuth app just to press Run on your own laptop is
+    pointless friction, so that case is allowed. It requires all three of:
+    dev mode, no OAuth configured, and a request from this machine. A
+    deployment fails all three -- render.yaml sets RELAY_ENV=prod, real
+    clients are not loopback, and configuring OAuth switches it off -- so
+    this cannot leave a public instance open by accident.
+    """
+    if not (IS_DEV and not AUTH_CONFIGURED):
+        return False
+    return (request.remote_addr or "") in ("127.0.0.1", "::1")
+
+
 def may_run(user: str | None) -> bool:
     """Runs need a signed-in user, and membership of the allowlist when set."""
+    if dev_open_access():
+        return True
     if user is None:
         return False
     return not ALLOWED or user.lower() in ALLOWED
@@ -173,7 +190,8 @@ def logout():
 @app.get("/api/me")
 def me():
     user = current_user()
-    return jsonify(user=user, avatar=session.get("avatar"), mayRun=may_run(user))
+    return jsonify(user=user, avatar=session.get("avatar"), mayRun=may_run(user),
+                   devOpen=dev_open_access())
 
 
 # --- status -------------------------------------------------------------
@@ -202,9 +220,9 @@ def config():
 @app.post("/api/run")
 def run():
     user = current_user()
-    if user is None:
-        return jsonify(error="Sign in with GitHub to start a run", loginUrl="/auth/login"), 401
     if not may_run(user):
+        if user is None:
+            return jsonify(error="Sign in with GitHub to start a run", loginUrl="/auth/login"), 401
         return jsonify(error=f"{user} is not on this server's allowlist"), 403
 
     body = request.get_json(silent=True) or {}

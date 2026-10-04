@@ -52,6 +52,129 @@ def _fmt(value, digits=2):
     return "n/a" if value is None else f"{round(float(value), digits):g}"
 
 
+# Depths (percent of the ranked library) the enrichment chart plots.
+CURVE_X = [1, 2, 5, 10, 20, 35, 50, 75, 100]
+
+
+def _chemotype(smiles: str) -> str:
+    """Label a compound by functional group, via substructure match only.
+
+    Deliberately conservative: anything that does not match a pattern outright
+    is left unlabelled rather than guessed at.
+    """
+    try:
+        from rdkit import Chem
+
+        m = Chem.MolFromSmiles(smiles)
+        if m is None:
+            return "—"
+        def has(sma):
+            p = Chem.MolFromSmarts(sma)
+            return p is not None and m.HasSubstructMatch(p)
+        n_thiol = len(m.GetSubstructMatches(Chem.MolFromSmarts("[SX2H]"))) if m else 0
+        if has("[CX3](=O)[NX3][OX2H1]"):
+            return "hydroxamate"
+        if n_thiol >= 2:
+            return "bis-thiol"
+        if n_thiol and (has("[CX3](=O)[OX2H1]") or has("[CX3](=O)[OX2][#6]")):
+            return "thiol-carboxylate"
+        if n_thiol:
+            return "thiol"
+        if has("[CX3](=O)[OX2H1]"):
+            return "carboxylate"
+    except Exception:
+        pass
+    return "—"
+
+
+def build_chart_data(res: dict, trace_dir: Path) -> dict | None:
+    """Turn a finished run into the chart payload the UI renders.
+
+    The enrichment curve is computed from the run's own held-out ranking
+    (ranked.json), the band is a bootstrap spread over that same ranking, and
+    the baseline is an actual random-ranking control measured at each depth.
+    Nothing here is a stand-in value.
+    """
+    ranked_path = trace_dir / "ranked.json"
+    if not ranked_path.is_file():
+        return None
+    try:
+        import json
+
+        import numpy as np
+
+        ranked = json.loads(ranked_path.read_text())
+        y = np.array([int(r["y"]) for r in ranked])          # already score-sorted, desc
+        n = len(y)
+        base = float(y.mean())
+        if n == 0 or base <= 0:
+            return None
+
+        def ef_at(labels, pct):
+            k = max(1, int(round(pct / 100.0 * len(labels))))
+            return float(labels[:k].mean() / base)
+
+        proposed = [round(ef_at(y, p), 2) for p in CURVE_X]
+
+        # Band: bootstrap the held-out set and take the spread of EF at each depth.
+        rng = np.random.default_rng(0)
+        draws = np.array([
+            [ef_at(y[np.sort(rng.integers(0, n, n))], p) for p in CURVE_X]
+            for _ in range(120)
+        ])
+        band = [round(float(s), 2) for s in draws.std(axis=0)]
+
+        # Baseline: a genuinely random ranking, averaged over draws.
+        base_runs = []
+        for _ in range(20):
+            shuffled = y[rng.permutation(n)]
+            base_runs.append([ef_at(shuffled, p) for p in CURVE_X])
+        baseline = [round(float(v), 2) for v in np.array(base_runs).mean(axis=0)]
+
+        top = res.get("top_hits") or []
+        rows = [{
+            "id": str(h.get("cid", "?")),
+            "score": float(h.get("score", 0)),
+            "err": float(h.get("score_std") or 0),
+            "family": _chemotype(h.get("smiles", "")),
+            "known": bool(h.get("label")),
+        } for h in top[:6]]
+
+        ymax = max(4, int(np.ceil(max(max(proposed), 1) * 1.15)))
+        step = max(1, round(ymax / 4))
+        src = res.get("source", "")
+        src_label = "live PubChem assay" if src.startswith("pubchem") else "synthetic fixture"
+
+        return {
+            "measured": True,
+            "tag": f"Live run · {src_label}",
+            "enrichment": {
+                "title": "Enrichment vs. screening depth",
+                "sub": f"This run · held-out, scaffold split · {src_label}",
+                "xlabel": "Top fraction screened (%)", "ylabel": "Enrichment factor (×)",
+                "xmax": 100, "ymax": ymax,
+                "xticks": [0, 25, 50, 75, 100],
+                "yticks": list(range(0, ymax + 1, step)),
+                "x": CURVE_X, "proposed": proposed, "band": band, "baseline": baseline,
+            },
+            "candidates": {
+                "title": "Top-ranked candidates",
+                "sub": "Predicted P(inhibits) · this run",
+                "xmax": 1, "xticks": [0, .2, .4, .6, .8, 1], "family": True,
+                "rows": rows,
+            },
+            "stats": [
+                {"val": _fmt(res.get("roc_auc"), 3), "lab": "ROC-AUC", "sub": "held-out, scaffold split"},
+                {"val": _fmt(res.get("ef_top1pct")) + "×", "lab": "Enrichment @ top 1%",
+                 "sub": _fmt(res.get("ef_top5pct")) + "× @ top 5%"},
+                {"val": _fmt(res.get("control_random_ef1")) + "×", "lab": "Random control",
+                 "sub": "y-scramble AUC " + _fmt(res.get("control_yscramble_auc"), 3)},
+            ],
+        }
+    except Exception:
+        return None  # charts are a view of the run, never a reason to fail it
+
+
 def run_events(question: str = DEFAULT_QUESTION, aid: int | None = None, trace_dir: Path | None = None):
     """Run the pipeline for real, yielding one event per completed step.
 
@@ -151,6 +274,13 @@ def run_events(question: str = DEFAULT_QUESTION, aid: int | None = None, trace_d
         "control_yscramble_auc": res.get("control_yscramble_auc"),
         "passed": passed,
         "next": verdict.get("next"),
+        # Two views of the same run, for two consumers. `charts` is the live
+        # dashboard: an enrichment curve with a bootstrap band and a measured
+        # random-ranking control, built here from ranked.json. `figures` is the
+        # report's raw material -- ROC points and score distributions computed
+        # in the screen from the same (y_test, scores) as the scalars above.
+        # Neither is derived from the other, and neither substitutes a value.
+        "charts": build_chart_data(res, trace_dir),
         "figures": {
             "roc_curve": res.get("roc_curve") or [],
             "enrichment_curve": res.get("enrichment_curve") or [],
