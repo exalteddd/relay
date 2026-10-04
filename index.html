@@ -528,6 +528,23 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .cog-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
 button.brand{width:100%;background:transparent;border:0;cursor:pointer;text-align:left}
 button.brand:hover .wordmark{color:var(--accent-strong)}
+.avatar.dev{background:var(--surface-2);color:var(--ink-3);font-size:8.5px;letter-spacing:.04em;
+  border:1px dashed var(--line)}
+.flab-action{float:right;background:none;border:0;padding:0;font:inherit;font-size:10.5px;
+  font-weight:700;letter-spacing:.04em;text-transform:none;color:var(--accent);cursor:pointer}
+.flab-action:hover{text-decoration:underline}
+.flab-action:disabled{color:var(--ink-3);cursor:default;text-decoration:none}
+.sharpen{border:1px solid var(--accent-ring);background:var(--accent-soft);border-radius:11px;padding:13px 14px;margin:-4px 0 14px}
+.sharpen-wait{font-size:13px;color:var(--ink-2)}
+.sharpen-flag{font-size:12px;font-weight:700;color:var(--st-await);margin-bottom:7px}
+.sharpen-q{font-size:13.5px;line-height:1.55;color:var(--ink)}
+.sharpen-list{margin:9px 0 0;padding-left:17px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.sharpen-sub{margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.45}
+.sharpen-actions{display:flex;gap:8px;margin-top:12px}
+.link-node{background:none;border:0;padding:0;font:inherit;color:var(--accent);cursor:pointer;text-align:left}
+.link-node:hover{text-decoration:underline}
+.bullets li .rel-tag{margin-left:8px}
+.prose p.muted{color:var(--ink-3)}
 .ec-link{margin-top:7px;font-size:12px}
 .ec-link a{color:var(--accent);text-decoration:none;word-break:break-all}
 .ec-link a:hover{text-decoration:underline}
@@ -1148,7 +1165,7 @@ function switchProject(id){
   if(!state.projects[id]) return;
   closePane(true);
   state.project=id;
-  renderProjects(); renderCrumb(); renderGraph();
+  renderProjects(); renderCrumb(); renderGraph(); updateProvenance();
   if(!state.view[id]) fit(false); else applyTransform(false);
   savePersist();
   closeMenus(); el.app.classList.remove("nav-open");
@@ -1530,14 +1547,33 @@ function paneSource(n){const m=n.meta;const cards=(m.sources||[]).map(s=>`
   return `<div class="section"><h3>Sources & records</h3>${cards}</div>
   ${sectionKV("Appraisal",{Relevance:m.relevance,Limitations:m.limitations})}
   ${actionRow([{id:"edit",label:"Edit"},{id:"open-source",label:"Open source",icon:IC.link},{id:"link-claim",label:"Connect to a claim"}])}`;}
+/* Evidence shown here is read off the graph, not retyped beside it. A
+   hypothesis used to list "supporting evidence" as prose while the edge that
+   actually linked it said something else — and one line claimed 12 sources
+   next to a node holding 3. Whatever the edges say is what you see. */
+function linkedEvidence(n,rels){
+  return curProj().edges
+    .filter(e=>e.to===n.id&&rels.includes(e.rel))
+    .map(e=>({node:nodeById(e.from),rel:e.rel}))
+    .filter(x=>x.node);
+}
+function evidenceList(items,cls){
+  return items.map(({node,rel})=>
+    `<li class="${cls}"><button class="link-node" data-goto="${node.id}">${esc(nodeHeading(node).title)}</button>`
+    + `<span class="rel-tag ${rel}">${esc(REL_LABEL[rel]||rel)}</span></li>`).join("");
+}
 function paneHypothesis(n){const m=n.meta;
   const preds=(m.predictions||[]).map(p=>`<li>${esc(p)}</li>`).join("");
-  const sup=(m.supports||[]).map(p=>`<li class="pos">${esc(p)}</li>`).join("");
-  const con=(m.contradict||[]).map(p=>`<li class="neg">${esc(p)}</li>`).join("");
+  const sup=evidenceList(linkedEvidence(n,["supports","uses"]),"pos");
+  const con=evidenceList(linkedEvidence(n,["contradicts"]),"neg");
+  // meta.contradict is a caveat the author wrote, not a linked node: say so.
+  const caveats=(m.contradict||[]).map(p=>`<li class="neg">${esc(p)}</li>`).join("");
   return `<div class="section"><div class="prose"><p>${esc(m.statement||"")}</p></div></div>
   ${preds?`<div class="section"><h3>Predictions</h3><ul class="bullets">${preds}</ul></div>`:""}
-  ${sup?`<div class="section"><h3>Supporting evidence</h3><ul class="bullets">${sup}</ul></div>`:""}
-  ${con?`<div class="section"><h3>Contradictory evidence</h3><ul class="bullets">${con}</ul></div>`:""}
+  <div class="section"><h3>Linked evidence</h3>${
+    (sup||con) ? `<ul class="bullets">${sup}${con}</ul>`
+      : `<div class="prose"><p class="muted">Nothing is connected to this yet. Use “Connect to a claim”.</p></div>`}</div>
+  ${caveats?`<div class="section"><h3>Caveats</h3><ul class="bullets">${caveats}</ul></div>`:""}
   ${sectionKV("Appraisal",{Uncertainty:m.uncertainty,"Alternative":m.alt})}
   ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"link-claim",label:"Connect to a claim"},{id:"edit",label:"Edit"}])}`;}
 function paneExperiment(n){const m=n.meta;
@@ -1677,6 +1713,7 @@ function wirePaneActions(n){
     const on=b.getAttribute("aria-pressed")==="true"; b.setAttribute("aria-pressed",String(!on));
     const s=b.dataset.series; $$(`[data-line="${s}"]`,el.paneBody).forEach(p=>p.style.opacity=on?"0":"1");
   }));
+  $$("[data-goto]",el.paneBody).forEach(b=>b.addEventListener("click",()=>selectNode(b.dataset.goto)));
   $$("[data-paneact]",el.paneBody).forEach(b=>b.addEventListener("click",()=>paneAction(b.dataset.paneact,n,b)));
 }
 function paneAction(act,n,btn){
@@ -1814,13 +1851,13 @@ function sendCmd(){
   const inp=$("#cmdInput"); const t=inp.value.trim(); if(!t) return;
   state.question=t; inp.value="";
   renderCmdCtx(); savePersist();
-  if(state.run.active){ toast("Question set — it applies to the next run"); return; }
+  if(state.run.active){ toast("Question updated — it applies to the next run"); return; }
   const exp=curProj().primaryExp && nodeById(curProj().primaryExp);
   if(!exp){
-    toast("Question saved. This project has no experiment to run yet.");
+    toast("Question saved. Add an experiment before this can be run.");
     return;
   }
-  openRunModal(exp.id);   // still goes through the approval gate
+  toast("Question set — press Run when you are ready");
 }
 $("#cmdSend").addEventListener("click",sendCmd);
 $("#cmdPlus").addEventListener("click",e=>{ e.stopPropagation(); openAddNodeMenu($("#cmdPlus")); });
@@ -2251,6 +2288,7 @@ $("#crumb").addEventListener("click",()=>{
   openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}`,m=>{ $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);})); });
 });
 $("#provenance").addEventListener("click",()=>{
+  if(!projectHasData()){ toast("This project has no results yet"); return; }
   openMenu($("#provenance"),`
     <div class="m-head">Data source${CHART_DATA.live?"":" (sample)"}</div>
     ${CHART_DATA.live?`<button class="mi" data-mode="live" aria-current="${state.dataMode==='live'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/></svg><span>This run (measured)<div class="mi-sub">${esc(CHART_DATA.live.tag||"live run")}</div></span></button>`:""}
@@ -2279,8 +2317,17 @@ function adoptRunData(data){
   if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
   renderPreviews(); savePersist();
 }
+function projectHasData(){ return curProj().id==="ndm1" || !!CHART_DATA.live; }
 function updateProvenance(){
   const d=curData();
+  // The sample charts belong to NDM-1. Other projects have no measured
+  // data, so the badge says that instead of borrowing the wrong label.
+  if(!projectHasData()){
+    el.provenance.dataset.kind="none";
+    el.provText.textContent="No results yet";
+    el.provTextLong.textContent="· run an experiment to produce some";
+    return;
+  }
   // Once a run has happened the displayed data is measured, so the badge must
   // stop calling it sample data.
   const showingMeasured = state.dataMode==="live" && !!CHART_DATA.live;
@@ -2320,14 +2367,18 @@ function openProjectForm(){
     <div class="modal-body"><div class="node-form">
       <div class="field"><label class="flab">Project name <span class="req">required</span></label>
         <input data-f="name" placeholder="NDM-1 triage"></div>
-      <div class="field"><label class="flab">Research question <span class="req">required</span></label>
+      <div class="field">
+        <label class="flab">Research question <span class="req">required</span>
+          <button type="button" class="flab-action" id="sharpenBtn">Sharpen with AI</button></label>
         <textarea data-f="question" rows="3" placeholder="Which untested compounds are most likely to inhibit NDM-1?"></textarea></div>
+      <div id="sharpenOut" hidden></div>
       <div class="form-error" id="formErr" hidden></div>
     </div></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button>
       <button class="btn primary" id="projGo">Create project</button></div>
   `,root=>{
     root.querySelector("[data-f]").focus();
+    wireSharpen(root,root.querySelector('[data-f="question"]'));
     root.querySelector("#projGo").addEventListener("click",()=>{
       const name=root.querySelector('[data-f="name"]').value.trim();
       const question=root.querySelector('[data-f="question"]').value.trim();
@@ -2335,6 +2386,43 @@ function openProjectForm(){
       if(miss.length){ const e=root.querySelector("#formErr"); e.textContent="Still needed: "+miss.join(", "); e.hidden=false; return; }
       closeModal(); createProject(name,question);
     });
+  });
+}
+
+/* One cheap model call turns a vague question into one the lab can work on.
+   The rewrite is offered, never applied silently: the author decides. */
+function wireSharpen(root,field){
+  const btn=root.querySelector("#sharpenBtn"), out=root.querySelector("#sharpenOut");
+  if(!btn||!out) return;
+  btn.addEventListener("click",async()=>{
+    const q=field.value.trim();
+    if(!q){ field.focus(); return; }
+    btn.disabled=true; btn.textContent="Sharpening…";
+    out.hidden=false;
+    out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Asking the model…</div></div>`;
+    try{
+      const r=await api("/api/refine-question",{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})});
+      const j=await r.json();
+      if(!r.ok){ out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(j.error||"Could not sharpen this")}</div></div>`; return; }
+      out.innerHTML=`
+        <div class="sharpen">
+          ${j.tooBroad?`<div class="sharpen-flag">This is broad enough that no single run could answer it.</div>`:""}
+          <div class="sharpen-q">${esc(j.refined)}</div>
+          ${j.changes&&j.changes.length?`<ul class="sharpen-list">${j.changes.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>`:""}
+          ${j.missing&&j.missing.length?`<div class="sharpen-sub">Still yours to decide: ${j.missing.map(esc).join("; ")}</div>`:""}
+          <div class="sharpen-actions">
+            <button type="button" class="btn primary" id="useRefined">Use this</button>
+            <button type="button" class="btn" id="keepMine">Keep mine</button>
+          </div>
+        </div>`;
+      out.querySelector("#useRefined").addEventListener("click",()=>{
+        field.value=j.refined; out.hidden=true; out.innerHTML=""; field.focus();
+      });
+      out.querySelector("#keepMine").addEventListener("click",()=>{ out.hidden=true; out.innerHTML=""; });
+    }catch(e){
+      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Could not reach the model.</div></div>`;
+    }finally{ btn.disabled=false; btn.textContent="Sharpen with AI"; }
   });
 }
 
@@ -2656,15 +2744,17 @@ async function refreshAuth(){
 function renderAuth(){
   const av=$("#authAvatar"), nm=$("#authName"), row=$("#authRow");
   if(!av||!nm||!row) return;
+  av.classList.remove("dev");
   if(AUTH.user){
     av.textContent=AUTH.user.slice(0,2).toUpperCase();
     if(AUTH.avatar){ av.style.backgroundImage=`url(${AUTH.avatar})`; av.style.backgroundSize="cover"; av.textContent=""; }
     nm.textContent=AUTH.user; row.title="Sign out";
   }else if(!AUTH.reachable){
-    av.style.backgroundImage=""; av.textContent="–"; nm.textContent="Static preview";
+    av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Static preview";
     row.title="No server on this host — runs replay a recorded trace";
   }else if(AUTH.devOpen){
-    av.style.backgroundImage=""; av.textContent="⌂"; nm.textContent="Local development";
+    av.style.backgroundImage=""; av.textContent="DEV"; av.classList.add("dev");
+    nm.textContent="Local development";
     row.title="Running locally with no OAuth app configured — sign-in is not required here";
   }else{
     av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Sign in with GitHub";

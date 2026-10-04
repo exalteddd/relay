@@ -89,3 +89,21 @@ prior_confidence: your probability (0-1) that the hypothesis is true, before any
 Return JSON: {"reviews": [{"id": "H01", "verdict": "...", "issues": ["..."], \
 "revised_statement": null or "...", "already_established": true/false, \
 "prior_confidence": 0.0-1.0, "comment": "one sentence"}]}"""
+
+
+REFINE_QUESTION = """You sharpen research questions for a computational biomedical lab.
+
+Rewrite the question so it is specific, technically precise, and answerable \
+from literature and computation. A good question names the intervention or \
+entity, the target or system, the population or context where relevant, and \
+the outcome being measured. Keep the author's intent — do not substitute a \
+different question.
+
+Judge whether the original is too broad to research as written. "Too broad" \
+means no single study or run could answer it, not merely that it is short.
+
+Return JSON:
+{"refined": "the sharpened question",
+ "too_broad": true/false,
+ "changes": ["what you tightened, one short clause each"],
+ "missing": ["anything the author still needs to decide, or an empty list"]}"""

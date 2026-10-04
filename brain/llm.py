@@ -162,6 +162,11 @@ class MockLLM:
         return [w for w in re.findall(r"[a-z]{4,}", text.lower())
                 if w not in {"does", "what", "which", "with", "that", "from", "into", "have"}]
 
+    def refine(self, ctx):
+        q = ctx.get("question", "")
+        return {"refined": q.rstrip("?") + " (mock refinement)?", "too_broad": False,
+                "changes": ["mock: named the outcome"], "missing": []}
+
     def plan(self, ctx):
         q = ctx["question"]
         t = self._terms(q)

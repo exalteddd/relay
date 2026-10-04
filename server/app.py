@@ -292,6 +292,39 @@ def delete_state():
     return jsonify(ok=True)
 
 
+# --- question refinement ------------------------------------------------
+@app.post("/api/refine-question")
+def refine_question():
+    """Sharpen a research question with one cheap model call.
+
+    Gated like a run, because it spends money — just much less of it.
+    """
+    user = current_user()
+    if not may_run(user):
+        return jsonify(error="Sign in to use this"), 401 if user is None else 403
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    if not question:
+        return jsonify(error="Nothing to sharpen"), 400
+    question = question[:500]
+    try:
+        from brain import prompts
+        from brain.config import load_config
+        from brain.llm import LLM
+        llm = LLM(load_config())
+        out = llm.json("refine", prompts.REFINE_QUESTION, f"Question: {question}",
+                       fast=True, max_tokens=700, context={"question": question})
+    except Exception as exc:
+        app.logger.warning("refine failed: %s", exc)
+        return jsonify(error="Could not reach the model"), 502
+    return jsonify(
+        refined=str(out.get("refined") or question)[:500],
+        tooBroad=bool(out.get("too_broad")),
+        changes=[str(c)[:160] for c in (out.get("changes") or [])][:5],
+        missing=[str(c)[:160] for c in (out.get("missing") or [])][:5],
+    )
+
+
 # --- runs ---------------------------------------------------------------
 @app.post("/api/run")
 def run():
