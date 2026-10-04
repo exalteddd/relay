@@ -79,6 +79,11 @@ def make_id(doi: str = "", arxiv: str = "", s2: str = "", pmid: str = "",
     return "title:" + hashlib.sha1(norm_title(title).encode()).hexdigest()[:12]
 
 
+class RateLimited(RuntimeError):
+    """The source asked us to slow down. Worth telling the caller apart from
+    a transient failure, because the answer is to stop asking, not to wait."""
+
+
 def _get(url: str, params: dict | None = None, headers: dict | None = None,
          retries: int = 3) -> requests.Response:
     h = {"User-Agent": USER_AGENT, **(headers or {})}
@@ -86,13 +91,22 @@ def _get(url: str, params: dict | None = None, headers: dict | None = None,
     for attempt in range(retries):
         try:
             r = requests.get(url, params=params, headers=h, timeout=TIMEOUT)
-            if r.status_code in (429, 500, 502, 503, 504):
+            # A 429 is not a blip: backing off 1.5s, 3s then 6s and failing
+            # anyway spent ten seconds per request to learn what the first
+            # reply already said. Give up immediately and let the caller
+            # stop using this source.
+            if r.status_code == 429:
+                raise RateLimited(f"429 from {url}")
+            if r.status_code in (500, 502, 503, 504):
                 raise requests.HTTPError(f"{r.status_code} from {url}", response=r)
             r.raise_for_status()
             return r
+        except RateLimited:
+            raise
         except requests.RequestException as e:
             last = e
-            time.sleep(1.5 * (2 ** attempt))
+            if attempt < retries - 1:
+                time.sleep(1.0 * (2 ** attempt))
     raise RuntimeError(f"request failed after {retries} attempts: {last}")
 
 
@@ -301,10 +315,23 @@ def search_all(queries: list[str], cfg: Config, sources: list[str] | None = None
     jobs: dict = {}
     results: list[Paper] = []
     errors: list[str] = []
+    limited: set[str] = set()      # sources that told us to stop
+
+    def fetch(src: str, q: str):
+        # Once a source rate-limits, every later query to it will too. Asking
+        # anyway is how a search that should take seconds takes a minute.
+        if src in limited:
+            raise RateLimited("skipped: already rate-limited this run")
+        try:
+            return SOURCES[src](q, per_query, cfg)
+        except RateLimited:
+            limited.add(src)
+            raise
+
     with ThreadPoolExecutor(max_workers=8) as pool:
         for q in queries:
             for s in sources:
-                jobs[pool.submit(SOURCES[s], q, per_query, cfg)] = (s, q)
+                jobs[pool.submit(fetch, s, q)] = (s, q)
         for fut in as_completed(jobs):
             s, q = jobs[fut]
             try:
@@ -316,4 +343,8 @@ def search_all(queries: list[str], cfg: Config, sources: list[str] | None = None
                 errors.append(f"{s} '{q}': {e}")
                 if on_event:
                     on_event("literature", f"{s} failed for '{q}' ({str(e)[:80]})")
+    if limited:
+        errors.append("rate-limited, so skipped after the first refusal: "
+                      + ", ".join(sorted(limited))
+                      + " (set an API key to use it)")
     return merge(results), errors

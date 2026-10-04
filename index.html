@@ -1142,7 +1142,7 @@ let state={
   run:{active:false,log:[],mode:null,id:3,timers:[],abort:null},
   deletedProjects:[],
   question:null,
-  opts:{aid:null,autoTidy:false},   // user-adjustable run options
+  opts:{aid:null,autoTidy:false,depth:"quick"},   // user-adjustable run options
   editing:false        // locked by default: structure is read-only and auto-spaced
 };
 function curProj(){return state.projects[state.project];}
@@ -3219,6 +3219,11 @@ function openSettings(){
           </select></div>
         <div class="field" data-when="aid"${o.aid?"":' hidden'}><label class="flab">PubChem BioAssay ID</label>
           <input data-s="aidNum" inputmode="numeric" value="${esc(o.aid||"")}" placeholder="1259411"></div>
+        <div class="field"><label class="flab">How deep a run goes</label>
+          <select data-s="depth">
+            <option value="quick"${(o.depth||"quick")==="quick"?" selected":""}>Quick — fewer papers, shallower reasoning, about half the time</option>
+            <option value="thorough"${o.depth==="thorough"?" selected":""}>Thorough — more papers, full reasoning</option>
+          </select></div>
         <div class="field"><label class="flab">After a run finishes</label>
           <select data-s="autoTidy">
             <option value="no"${o.autoTidy?"":" selected"}>Leave the layout alone</option>
@@ -3277,6 +3282,7 @@ function openSettings(){
     sel("editing").addEventListener("change",e=>setEditing(e.target.value==="editing"));
     sel("question").addEventListener("input",e=>{ state.question=e.target.value.trim(); renderCmdCtx(); save(); });
     sel("autoTidy").addEventListener("change",e=>{ state.opts.autoTidy=e.target.value==="yes"; save(); });
+    sel("depth").addEventListener("change",e=>{ state.opts.depth=e.target.value; save(); });
     sel("aid").addEventListener("change",e=>{
       const live=e.target.value==="live";
       root.querySelector('[data-when="aid"]').hidden=!live;
@@ -3356,7 +3362,7 @@ function openResearchModal(why){
       <div class="review-grid">
         <div><label class="flab">Sources</label><div class="fval">OpenAlex, Semantic Scholar, arXiv, Europe PMC</div></div>
         <div><label class="flab">Produces</label><div class="fval">Grounded claims, hypotheses, a critique</div></div>
-        <div><label class="flab">Takes</label><div class="fval">A few minutes</div></div>
+        <div><label class="flab">Takes</label><div class="fval">${(state.opts&&state.opts.depth)==="thorough"?"Two to four minutes":"About ninety seconds"}</div></div>
         <div><label class="flab">Costs</label><div class="fval">Roughly 4 cents of model usage</div></div>
       </div>
       <div class="approve" id="approveBox" role="checkbox" aria-checked="false" tabindex="0">
@@ -3609,6 +3615,7 @@ async function runViaBackend(expId,runId){
     const ctl=new AbortController(); state.run.abort=ctl;
     const res=await api("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({project:curProj().id,experiment:expId,runId,        question:state.question||curProj().question||"",
+        depth:(state.opts&&state.opts.depth)||"quick",
         aid:(state.opts&&state.opts.aid)||null}),signal:ctl.signal});
     // Busy is not failure. One run happens at a time because two will not fit
     // in the instance's memory, so wait for the slot instead of giving up --

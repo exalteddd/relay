@@ -105,27 +105,17 @@ def build_graph(proj_dir: Path, question: str) -> dict:
     else:
         ev = None
 
-    for h in hyps[:6]:
-        hid = h.get("id") or f"h{len(nodes)}"
-        review = h.get("review") or {}
-        rejected = h.get("status") == "rejected"
-        nodes.append({"id": hid, "type": "hypothesis",
-                      "title": (h.get("statement") or "Hypothesis")[:46],
-                      "summary": (h.get("statement") or "")[:88],
-                      "status": "failed" if rejected else "done",
-                      "meta": {"statement": h.get("statement", ""),
-                               "predictions": [h.get("prediction")] if h.get("prediction") else [],
-                               "uncertainty": f"Reviewer confidence {h.get('confidence','?')}"
-                                              + (f" — {review.get('verdict')}" if review.get("verdict") else ""),
-                               "alt": "; ".join(review.get("issues", [])[:2]),
-                               "contradict": review.get("issues", [])[:3]}})
+    for idx, h in enumerate(hyps[:4]):
+        node, rejected = _hypothesis_node(h, f"Hypothesis {chr(65+idx)}")
+        nodes.append(node)
         if ev:
-            edges.append({"from": ev, "to": hid, "rel": "contradicts" if rejected else "supports"})
+            edges.append({"from": ev, "to": node["id"],
+                          "rel": "contradicts" if rejected else "supports"})
 
     gaps = _safe(emap, "gaps", default=[]) or []
     if gaps:
         nodes.append({"id": "next", "type": "next", "title": "Next experiment",
-                      "summary": (gaps[0].get("gap") if isinstance(gaps[0], dict) else str(gaps[0]))[:88],
+                      "summary": _short(gaps[0].get("gap") if isinstance(gaps[0], dict) else str(gaps[0])),
                       "status": "planned",
                       "meta": {"changed": _safe(emap, "summary", default="") or "",
                                "uncertainty": "; ".join(
@@ -154,12 +144,27 @@ def _evidence_node(claims):
                      "limitations": "Claims whose quote was not verbatim in the abstract were rejected before this point."}}
 
 
-def _hypothesis_node(h):
+def _short(text, limit=78):
+    """A one-line gist: first clause or sentence, trimmed on a word."""
+    t = " ".join((text or "").split())
+    for stop in (". ", "; "):
+        if stop in t[:limit + 20]:
+            t = t.split(stop, 1)[0]
+            break
+    if len(t) > limit:
+        t = t[:limit].rsplit(" ", 1)[0] + "…"
+    return t
+
+
+def _hypothesis_node(h, label=None):
     review = h.get("review") or {}
     rejected = h.get("status") == "rejected"
+    # A card reads as a label and a line, the way the worked example does.
+    # Putting 46 characters of raw statement in the title wrapped every card
+    # to four lines and made the column unreadable.
     return {"id": h.get("id") or f"h{id(h)}", "type": "hypothesis",
-            "title": (h.get("statement") or "Hypothesis")[:46],
-            "summary": (h.get("statement") or "")[:88],
+            "title": label or "Hypothesis",
+            "summary": _short(h.get("statement")),
             "status": "failed" if rejected else "done",
             "meta": {"statement": h.get("statement", ""),
                      "predictions": [h["prediction"]] if h.get("prediction") else [],
@@ -169,7 +174,19 @@ def _hypothesis_node(h):
                      "contradict": review.get("issues", [])[:3]}}, rejected
 
 
-def research_events(question: str, cfg):
+# How much work a run does. The four strong-model calls -- scoping,
+# synthesis, hypotheses, critique -- run in sequence because each needs the
+# one before, so they set the floor on how fast a run can be. Quick shrinks
+# what they read and how hard they think; thorough is the original settings.
+DEPTHS = {
+    "quick":    {"max_queries": 5, "prefilter": 36, "max_papers": 15,
+                 "n_hypotheses": 5, "workers": 8, "effort": "low"},
+    "thorough": {"max_queries": 8, "prefilter": 60, "max_papers": 25,
+                 "n_hypotheses": 6, "workers": 8, "effort": None},
+}
+
+
+def research_events(question: str, cfg, depth: str = "quick"):
     """Run the pipeline on a thread and yield UI events as stages complete.
 
     run_research is synchronous and reports through a callback, so the work
@@ -179,6 +196,13 @@ def research_events(question: str, cfg):
     """
     from brain import pipeline as P
 
+    d = DEPTHS.get(depth, DEPTHS["quick"])
+    # Reasoning depth is the other half: these models spend most of a call
+    # thinking, so lowering it on a quick run is worth more than trimming
+    # the reading.
+    if d["effort"] and not cfg.reasoning_effort:
+        cfg.reasoning_effort = d["effort"]
+
     q: "queue.Queue[tuple]" = queue.Queue()
     result = {}
 
@@ -187,7 +211,10 @@ def research_events(question: str, cfg):
 
     def work():
         try:
-            proj = P.run_research(question, cfg, P.Options(), on_event=on_event)
+            opts = P.Options(max_queries=d["max_queries"], prefilter=d["prefilter"],
+                             max_papers=d["max_papers"], n_hypotheses=d["n_hypotheses"],
+                             workers=d["workers"])
+            proj = P.run_research(question, cfg, opts, on_event=on_event)
             result["dir"] = Path(proj.root)      # Project.path is a method; root is the Path
             result["proj"] = proj
         except Exception as exc:                     # reported, not swallowed
@@ -241,8 +268,8 @@ def research_events(question: str, cfg):
         elif agent in ("hypothesis-agent", "critic-agent") and proj_dir:
             hyps = read("hypotheses/hypotheses.json", [])
             nodes, edges = [], []
-            for h in hyps[:6]:
-                node, rejected = _hypothesis_node(h)
+            for idx, h in enumerate(hyps[:4]):
+                node, rejected = _hypothesis_node(h, f"Hypothesis {chr(65+idx)}")
                 if node["id"] in sent:
                     continue
                 nodes.append(node); sent.add(node["id"])

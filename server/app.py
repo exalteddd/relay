@@ -486,6 +486,7 @@ def run():
 
     # Which engine can answer this. Literature reasoning works for any
     # question; the compound screen only for the one thing it does.
+    depth = body.get("depth") if body.get("depth") in ("quick", "thorough") else "quick"
     plan = resolve_mode(question)
     if body.get("mode") in ("screen", "literature"):
         plan = {**plan, "mode": body["mode"]}        # an explicit choice wins
@@ -500,7 +501,7 @@ def run():
                     yield "data: " + json.dumps({"type": "error",
                         "msg": "No model key on this server. Set OPENAI_API_KEY and redeploy."}) + "\n\n"
                     return
-                events = research_events(question, cfg)
+                events = research_events(question, cfg, depth)
             else:
                 events = run_events(question=question, aid=aid)
             for event in events:
