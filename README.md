@@ -1,80 +1,144 @@
-# Relay
+# Relay — an autonomous discovery lab
 
-Relay turns an autonomous research loop into something you can see and steer. A
-project is a graph: a question, the evidence behind it, competing hypotheses, the
-experiments that test them, the results, and the next experiment to run. You move
-the nodes around, open any one of them to read the detail, and press Run to watch
-the agents work.
+**Decide what to test, before you spend testing it.** Relay runs a computational
+discovery loop — read the literature, form a hypothesis, choose and run an
+experiment, judge the result, sharpen the next question — and turns a library of
+thousands of compounds into a short, ranked, evidence-backed shortlist worth an
+assay.
 
-The loaded example is NDM-1 inhibitor triage. NDM-1 is the enzyme that lets
-carbapenem-resistant *Klebsiella pneumoniae* destroy carbapenem antibiotics.
-The task is to rank untested compounds by how likely they are to inhibit it, so
-the lab assays the few most promising ones first. The product is the screening
-filter, not a drug.
+The loaded case study is **NDM-1 inhibitor triage**. NDM-1 is the enzyme in
+carbapenem-resistant *Klebsiella pneumoniae* that destroys last-resort carbapenem
+antibiotics; Relay ranks untested compounds by how likely they are to inhibit it,
+so the lab assays the few most promising ones first.
 
-## What it does
+> 7th Global AI Hackathon · *Agentic Scientific Discovery*.
+> In-silico triage, not a validated therapeutic — it reprioritizes candidates, it
+> does not confirm binding.
 
-- **Research graph.** Every project is a node graph you can drag, pan, zoom, and
-  fit. Edges carry meaning (uses, tests, produced, supports, contradicts) and
-  show their label on hover or selection. Each project keeps its own layout.
-- **Inspection.** Click a node and a detail pane opens over the right half of the
-  workspace while the graph stays visible. Selecting another node updates the same
-  pane. Drag the divider to resize it, maximize it, or press Escape to close. Node
-  positions and zoom are preserved.
-- **Results.** Result nodes show a collapsible chart preview right on the canvas,
-  and the full charts with their underlying tables in the detail pane. Switch
-  between Plot, Table, Evidence, and Activity. Clicking a point or a bar selects
-  the record behind it.
-- **Sample data, labelled.** A single control flips every chart and table between
-  the verified NDM-1 numbers and the illustrative placeholders. Illustrative
-  values are always marked as such and never presented as measured findings.
-- **Runs.** Pressing Run opens a short review of inputs, budget, and the approval
-  it needs. Approve it and the agent events stream in while node statuses move
-  through planned, running, done, and failed.
+**Live interface:** https://exalteddd.github.io/relay/ — a static host, so Run
+there replays a recorded trace. Real runs need the backend below.
 
-## Running it
+## Result (held-out, scaffold-split)
 
-No build step, no dependencies. The interface is a single HTML file.
+| metric | value |
+|---|---|
+| Ranking accuracy (ROC-AUC) | **0.75** |
+| Enrichment @ top 1% | **11.3×** |
+| Enrichment @ top 5% | 7.2× |
+| Control — random ranking | 1.05× (≈ no gain) |
+| Control — y-scramble AUC | 0.52 (≈ chance) |
 
-Static, no backend:
+**~11× fewer assays per confirmed hit** than random testing. The top of the
+shortlist comes back as thiol-carboxylate and hydroxamate chemotypes — the known
+metallo-β-lactamase inhibitor families — recovered by the model rather than told
+to it.
 
-    # open index.html directly, or serve the folder
-    python -m http.server 8000
-    # then open http://localhost:8000
+These numbers are from the **bundled synthetic fixture**, not a live assay. A
+real-data run is the same code with `--aid <PubChem NDM-1 assay>`.
 
-With live runs:
+## How it fits together
 
-    python relay_server.py
-    # then open http://localhost:8000
+```
+index.html ──POST /api/run──▶ server/app.py ──▶ server/pipeline_runner.py
+    ▲                          (auth, SSE)        │ calls the agent tools
+    └──── streamed events ────────────────────────┘ propose → screen → judge
+```
 
-`relay_server.py` serves the interface and adds two endpoints: `GET /api/health`
-and `POST /api/run` (a Server-Sent Events stream of run events). When the medlab
-screening pipeline is importable next to the server, Run drives it; otherwise it
-streams a clearly labelled demo so the interface still runs end to end.
+The interface is a front end. A real run happens in the backend, which has the
+pipeline and the credentials. A static page has neither, so it replays a recorded
+trace — and labels itself as doing so. The two paths are never presented alike.
 
-## How a run actually works
+| Path | What it is |
+|---|---|
+| `index.html` | The whole interface, one file. See [INTERFACE.md](INTERFACE.md). |
+| `server/` | Flask backend: GitHub sign-in, and runs streamed over SSE |
+| `medlab/` | The screening engine: fingerprints, Bemis-Murcko scaffold split, random-forest ranker, enrichment + ROC-AUC with controls, PubChem fetch with synthetic fallback |
+| `lab/` | Omnigent agent bundle — PI orchestrator plus Literature, Extractor, Hypothesizer, Critic and Screener, with the approval gate and budget policies |
+| `brain/` | The research-memory framework underneath |
 
-The interface is a front end. A real run happens in a backend process that has
-the pipeline and the model credentials:
+## Run it locally
 
-    UI  ->  POST /api/run  ->  server orchestrates (run_pipeline / omnigent)
-        ->  streams events  ->  UI updates node status and opens the result
+Requires Python 3.11+.
 
-A static page has no server and no credentials, so it cannot orchestrate. In that
-case Run replays a recorded trace instead. The two paths are labelled distinctly
-in the top bar ("Live Omnigent run" versus "Replaying trace"), so a replay is
-never mistaken for a live run.
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-server.txt && pip install -e .
+cp .env.example .env          # fill in what you need; .env is gitignored
+python -m server.app          # http://localhost:8000
+```
 
-## Files
+Without `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` the interface still loads and
+the engine still runs from the command line, but sign-in is disabled and so
+`/api/run` will refuse. To run the pipeline directly, with no server:
 
-- `index.html` — the whole interface, in one file
-- `relay_server.py` — local server: serves the interface and exposes `/api/run`
-- `assets/` — logo
+```bash
+python -m medlab.run_pipeline            # synthetic fixture
+python -m medlab.run_pipeline --aid AID  # live PubChem assay
+```
 
-## Notes on the numbers
+## Deploy
 
-The NDM-1 sample reflects a scaffold-split run on a synthetic fixture: ROC-AUC
-0.75, enrichment 11.3x at the top 1% of the library (7.2x at 5%), against clean
-controls (random 1.05x, y-scramble AUC 0.52). A real-data run uses a PubChem
-NDM-1 BioAssay through the same pipeline. Everything shown in the interface is
-sample or illustrative data unless a live run says otherwise.
+`render.yaml` is a Render blueprint. Point Render at this repo as a Blueprint;
+it builds, sets `RELAY_ENV=prod`, generates `SESSION_SECRET`, and prompts once
+for the values marked `sync: false`.
+
+Create a GitHub OAuth app (Settings → Developer settings → OAuth Apps) with the
+callback URL set to exactly `<your-origin>/auth/callback`, and put its id and
+secret in Render's environment.
+
+## Secrets
+
+- Every secret is read from the environment. None are committed, and `.env` is
+  gitignored.
+- The browser is never sent a key. `/api/config` returns booleans describing how
+  the server is configured, never a value.
+- The GitHub access token is exchanged server-side, read once to learn who signed
+  in, then dropped. It is not stored in the session and no endpoint returns it.
+- OAuth asks for `read:user` only — no repository or write access.
+- Session cookies are signed, `HttpOnly`, `SameSite=Lax`, and `Secure` off
+  localhost. `SESSION_SECRET` is mandatory when `RELAY_ENV` is not `dev`.
+- `RELAY_ALLOWED_USERS` optionally restricts who may spend compute.
+
+## Tests
+
+```bash
+python -m pytest medlab/tests -q       # screening engine + controls
+BRAIN_PROVIDER=mock pytest tests -q    # research-memory framework
+```
+
+## Scientific rigor & safety
+
+- **Scaffold split** — train and test share no Bemis-Murcko scaffold, so the
+  model cannot win by memorizing a chemical series.
+- **Two controls** — a random-ranking baseline (must be ≈1×) and a y-scramble
+  (shuffled labels must collapse AUC to ≈0.5).
+- **Human approval gate** on the experiment choice, plus cost and tool-call
+  budgets. A question typed into the prompt bar still goes through it.
+- **Labelled provenance** — the interface distinguishes a live run from a
+  replayed trace, and sample data from measured findings.
+- **Limits** — this works from bioassay labels, not binding confirmation;
+  bioassay actives can include frequent hitters; any hit needs cell-based and
+  resistance validation.
+
+## Status
+
+- The screening pipeline runs for real through the backend: a signed-in run
+  streams events from the actual tools and returns the figures above.
+- **A live `omnigent run lab`** — the Omnigent orchestrator LLM dispatching the
+  sub-agents — **has not been executed yet.** It needs model credentials and a
+  local runtime (Node 22, tmux, bubblewrap). The verified runs come from the
+  driver that calls the *same tools in the same order*. Until that runs, nothing
+  here should be described as a live Omnigent orchestration.
+
+## Stack
+
+Omnigent (orchestration) · Claude (agent reasoning) · PubChem BioAssay +
+Europe PMC (data) · RDKit + scikit-learn (screening) · Flask · Python.
+
+## Team
+
+_Add team member names here._
+
+## License
+
+MIT — see [LICENSE](LICENSE).
