@@ -2286,7 +2286,7 @@ function updateProvenance(){
   if(!projectHasData()){
     el.provenance.dataset.kind="none";
     el.provText.textContent="No results yet";
-    el.provTextLong.textContent="· run an experiment to produce some";
+    el.provTextLong.textContent="";
     return;
   }
   // Once a run has happened the displayed data is measured, so the badge must
