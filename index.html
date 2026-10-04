@@ -228,9 +228,6 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .node.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
 .node.pulse{animation:nodepulse 1.1s ease}
 /* Editing affordances appear only in edit mode, so the locked view stays calm. */
-.editing .node{cursor:grab}
-.editing .node.dragging{cursor:grabbing;box-shadow:var(--shadow-lg);z-index:20}
-.editing .node .node-head{cursor:inherit}
 .port{
   position:absolute;right:-7px;top:50%;margin-top:-7px;width:14px;height:14px;border-radius:50%;
   background:var(--surface);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.18);
@@ -751,7 +748,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
           </button>
           <button class="pill-btn" id="editBtn" title="Edit the diagram (E)" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17v2h2l9-9-2-2-9 9zM15 6l3 3M12 20h8"/></svg>
-            <span id="editBtnLabel">Edit</span>
+            <span id="editBtnLabel">Connect</span>
           </button>
           <button class="pill-btn" id="tidyBtn" title="Arrange the graph left to right (T)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6M3 12h6M3 18h6M15 4h6M15 12h6M15 20h6M9 6l6-2M9 12h6M9 18l6 2"/></svg>
@@ -961,11 +958,8 @@ function loadPersist(){
     // exist yet, so a saved selection of one would be discarded.
     if(p.view) state.view=p.view;
     if(p.previews) state.previews=p.previews;
-    if(p.pos){
-      for(const pid in p.pos){ if(!state.projects[pid])continue;
-        for(const n of state.projects[pid].nodes){ const o=p.pos[pid][n.id]; if(o){n.x=o.x;n.y=o.y;} }
-      }
-    }
+    // Positions are not restored: the layout derives them from the graph, so
+    // there is no saved arrangement that could come back wrong.
     // Projects the user made are stored whole, since there is no base to diff.
     if(p.userProjects){
       for(const up of p.userProjects){ state.projects[up.id]=up; if(!PROJECT_ORDER.includes(up.id)) PROJECT_ORDER.push(up.id); }
@@ -993,11 +987,7 @@ function savePersist(){
   if(saveT) clearTimeout(saveT);
   saveT=setTimeout(()=>{
     try{
-      const pos={}, extraNodes={}, extraEdges={};
-      for(const pid in state.projects){
-        pos[pid]={};
-        for(const n of state.projects[pid].nodes) pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
-      }
+      const extraNodes={}, extraEdges={};
       for(const pid in state.projects){
         const base=BASE[pid];
         // A user-made project is stored whole under userProjects. Diffing it
@@ -1007,10 +997,9 @@ function savePersist(){
         if(!base) continue;
         const baseIds=new Set(base.nodes.map(n=>n.id));
         for(const n of state.projects[pid].nodes){
-          pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
           if(!baseIds.has(n.id)){ (extraNodes[pid]=extraNodes[pid]||[]).push(n); }
         }
-        if(base){
+        {
           const baseEdgeKeys=new Set(base.edges.map(e=>e.from+">"+e.to));
           for(const e of state.projects[pid].edges){ if(!baseEdgeKeys.has(e.from+">"+e.to)) (extraEdges[pid]=extraEdges[pid]||[]).push(e); }
         }
@@ -1020,7 +1009,7 @@ function savePersist(){
         question:state.question,opts:state.opts,
         userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
         deletedProjects:state.deletedProjects||[],
-        view:state.view,previews:state.previews,pos,extraNodes,extraEdges
+        view:state.view,previews:state.previews,extraNodes,extraEdges
       };
       localStorage.setItem(LSK,JSON.stringify(payload));
       syncUp(payload);
@@ -1113,6 +1102,7 @@ function switchProject(id){
   closePane(true);
   state.project=id;
   renderProjects(); renderCrumb(); renderGraph(); updateProvenance(); syncQuestionBar();
+  layoutGraph(curProj()); renderGraph();      // arrive snapped together
   if(!state.view[id]) fit(false); else applyTransform(false);
   savePersist();
   closeMenus(); el.app.classList.remove("nav-open");
@@ -1184,8 +1174,7 @@ function renderGraph(){
     wireNode(d,n);
   }
   renderPreviews();
-  // edges after layout settles (measure heights)
-  requestAnimationFrame(renderEdges);
+  scheduleEdges();
 }
 
 /* edges */
@@ -1195,6 +1184,19 @@ function edgePath(a,b){
   const dx=Math.max(38,Math.abs(x2-x1)*0.5);
   return {d:`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`,mx:(x1+x2)/2,my:(y1+y2)/2};
 }
+/* Edges are drawn after a frame so node heights can be measured. A hidden or
+   background tab never runs that frame, which left a page loaded out of view
+   with no edges at all, so a timer backs it up and whichever fires first
+   wins. */
+let edgeFrame=null, edgeTimer=null;
+function scheduleEdges(){
+  const run=()=>{ cancelAnimationFrame(edgeFrame); clearTimeout(edgeTimer);
+                  edgeFrame=edgeTimer=null; renderEdges(); };
+  cancelAnimationFrame(edgeFrame); clearTimeout(edgeTimer);
+  edgeFrame=requestAnimationFrame(run);
+  edgeTimer=setTimeout(run,120);
+}
+
 function renderEdges(){
   const p=curProj(); const sel=state.selection;
   const bb=graphBBox();
@@ -1242,46 +1244,22 @@ function setEditing(on){
   el.app.classList.toggle("editing",state.editing);
   const b=$("#editBtn"); b.setAttribute("aria-pressed",String(state.editing));
   b.classList.toggle("on",state.editing);
-  $("#editBtnLabel").textContent=state.editing?"Lock":"Edit";
-  b.title=state.editing?"Lock the diagram (E)":"Edit the diagram (E)";
+  $("#editBtnLabel").textContent=state.editing?"Done":"Connect";
+  b.title=state.editing?"Finish connecting (E)":"Change connections (E)";
   renderGraph(); savePersist();
   toast(state.editing
-    ? "Editing — drag nodes, or drag a node's right edge onto another to connect them"
-    : "Locked — the diagram is fixed");
+    ? "Connecting — drag a node's right edge onto another, or right-click a link to change it"
+    : "Locked — connections are fixed");
 }
 
 function wireNode(d,n){
-  let start=null,dragging=false;
   d.addEventListener("pointerdown",ev=>{
     if(ev.button!==0) return;
     const onLink=ev.target.closest("[data-act]");
     if(onLink){ ev.stopPropagation(); if(onLink.dataset.act==="preview"){ togglePreview(n.id,true); } return; }
     if(ev.target.closest(".port")){ beginLink(ev,n); return; }
     ev.stopPropagation();          // don't start a canvas pan from the node
-    if(state.editing){
-      start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false;
-      try{ d.setPointerCapture(ev.pointerId); }catch(e){}   // no capture for synthetic pointers
-    } else {
-      selectNode(n.id);
-    }
-  });
-  d.addEventListener("pointermove",ev=>{
-    if(!start) return;
-    const dx=ev.clientX-start.x, dy=ev.clientY-start.y;
-    if(!dragging && Math.hypot(dx,dy)>4){ dragging=true; d.classList.add("dragging"); }
-    if(dragging){
-      const v=view();
-      n.x=Math.round(start.nx+dx/v.scale); n.y=Math.round(start.ny+dy/v.scale);
-      d.style.left=n.x+"px"; d.style.top=n.y+"px";
-      renderEdges();
-    }
-  });
-  d.addEventListener("pointerup",ev=>{
-    if(!start) return;
-    try{d.releasePointerCapture(ev.pointerId);}catch(e){}
-    if(dragging){ d.classList.remove("dragging"); savePersist(); }
-    else selectNode(n.id);
-    start=null; dragging=false;
+    selectNode(n.id);
   });
   d.addEventListener("contextmenu",ev=>nodeContextMenu(ev,n));
   d.addEventListener("keydown",ev=>{
@@ -2541,8 +2519,8 @@ function openSettings(){
       <div class="section"><h3>Diagram</h3>
         <div class="field"><label class="flab">Mode</label>
           <select data-s="editing">
-            <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
-            <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
+            <option value="locked"${!state.editing?" selected":""}>Locked — connections fixed</option>
+            <option value="editing"${state.editing?" selected":""}>Connecting — links can be changed</option>
           </select></div>
 
       </div>
@@ -3040,6 +3018,7 @@ function init(){
   applyTheme();
   updateProvenance();
   renderProjects(); renderCrumb(); renderGraph(); renderCmdCtx(); syncQuestionBar();
+  layoutGraph(curProj()); renderGraph();
   if(state.view[state.project]) applyTransform(false); else fit(false);
   // open the result preview by default on first load (matches the primary mock)
   if(!localStorageSeen()){ const id=curProj().resultNode; if(id){ previewState(id).open=true; renderPreviews(); } }
