@@ -159,5 +159,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Team
 
-- **Michael Karabinosh** — Full Stack
-- **Clinton Adorsoo**
+- **Michael** — Full Stack
+- **Clinton Adorsoo** — Backend
+- **Madu** — Research
+- **Chris** — Frontend
