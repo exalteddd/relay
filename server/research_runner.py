@@ -112,6 +112,33 @@ def build_graph(proj_dir: Path, question: str) -> dict:
             edges.append({"from": ev, "to": node["id"],
                           "rel": "contradicts" if rejected else "supports"})
 
+    # The pipeline proposes an experiment per hypothesis. Showing the
+    # best-ranked one completes the arc the worked example has -- question,
+    # evidence, hypotheses, experiment, result -- without inventing anything:
+    # it is planned, not run, and the result node says so until something
+    # produces one.
+    exp_src = next((h for h in hyps[:4] if isinstance(h.get("experiment"), dict)), None)
+    if exp_src:
+        x = exp_src["experiment"]
+        nodes.append({"id": "exp", "type": "experiment",
+                      "title": "Proposed experiment",
+                      "summary": _short(x.get("description"), 70),
+                      "status": "planned",
+                      "meta": {"tests": [{"name": (x.get("type") or "experiment").replace("_", " "),
+                                          "sel": True, "why": x.get("description", "")}],
+                               "method": x.get("description", ""),
+                               "inputs": x.get("data_or_tools", ""),
+                               "baseline": "", "controls": "",
+                               "params": f"Tests: {_short(exp_src.get('statement'), 60)}",
+                               "approval": "Required before run."}})
+        for h in hyps[:4]:
+            hid = h.get("id")
+            if hid:
+                edges.append({"from": hid, "to": "exp", "rel": "tests"})
+        nodes.append({"id": "res", "type": "result", "title": "Result",
+                      "summary": "Nothing run yet", "status": "planned", "meta": {}})
+        edges.append({"from": "exp", "to": "res", "rel": "produced"})
+
     gaps = _safe(emap, "gaps", default=[]) or []
     if gaps:
         nodes.append({"id": "next", "type": "next", "title": "Next experiment",
@@ -121,8 +148,11 @@ def build_graph(proj_dir: Path, question: str) -> dict:
                                "uncertainty": "; ".join(
                                    (g.get("gap") if isinstance(g, dict) else str(g)) for g in gaps[:3]),
                                "tests": []}})
-        for h in hyps[:2]:
-            edges.append({"from": h.get("id"), "to": "next", "rel": "uses"})
+        if exp_src:
+            edges.append({"from": "res", "to": "next", "rel": "uses"})
+        else:
+            for h in hyps[:2]:
+                edges.append({"from": h.get("id"), "to": "next", "rel": "uses"})
 
     return {"nodes": nodes, "edges": edges}
 

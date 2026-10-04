@@ -897,10 +897,6 @@ window.relayLoadingWatchdog=setTimeout(()=>{const message=document.getElementByI
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
           <span class="btn-label">Report</span>
         </button>
-        <button class="icon-btn" id="shareBtn" title="Share" aria-label="Share" style="width:36px;height:36px">
-        <button class="icon-btn" id="shareBtn" title="Export this project" aria-label="Export this project" style="width:36px;height:36px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
-        </button>
       </div>
     </header>
 
@@ -996,12 +992,7 @@ window.relayLoadingWatchdog=setTimeout(()=>{const message=document.getElementByI
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
       <span class="btn-label">Back to graph</span>
     </button>
-    <span class="r-note" id="reportNote"></span>
     <span class="sp"></span>
-    <button class="btn" id="reportWrite" title="Draft abstract, discussion and limitations from this project">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5zM2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      <span class="btn-label">Write narrative</span>
-    </button>
     <button class="btn primary" id="reportPrint">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
       <span class="btn-label">Export PDF</span>
@@ -3189,21 +3180,6 @@ function renameProject(id){
 
 $("#addProject").addEventListener("click",openProjectForm);
 
-/* Export the project itself — the graph, its question and its connections —
-   rather than a link that means nothing on anyone else's machine. */
-$("#shareBtn").addEventListener("click",()=>{
-  const p=curProj();
-  const payload={exported:new Date().toISOString(),project:{id:p.id,name:p.name,
-    question:(questionNode()||{}).meta?.objective||state.question||"",
-    nodes:p.nodes.map(n=>({id:n.id,type:n.type,title:n.title,summary:n.summary,
-      status:n.status,origin:n.origin||"generated",meta:n.meta})),
-    edges:p.edges}};
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
-  a.download=`${p.id}-project.json`; a.click(); URL.revokeObjectURL(a.href);
-  toast("Exported project JSON");
-});
-
 /* The wordmark opens the source. */
 $("#brand").addEventListener("click",()=>{
   window.open("https://github.com/exalteddd/relay","_blank","noopener");
@@ -3769,11 +3745,7 @@ function localStorageSeen(){ try{return !!localStorage.getItem(LSK);}catch(e){re
 /* ============================== report ================================
    Assembles the project into a paper. Everything here is derived from the
    graph, the chart data and the run log -- the report cannot state a result
-   the workspace does not hold. The three narrative sections may be replaced
-   by model-written prose (see writeNarrative), which is constrained to the
-   same facts and is labelled in the byline when used. */
-const NARRATIVE={abstract:"",discussion:"",limitations:"",source:"assembled",model:"",
-  verified:false, verifyError:null, removed:[]};
+   the workspace does not hold. */
 
 /* --- figures, derived from what the project actually recorded ----------
    The figure set is built per project, from `project.results` (written by a
@@ -4062,27 +4034,6 @@ function secProvenance(){
 }
 
 /* --- assembly --------------------------------------------------------- */
-/* The claim check is stated in the document itself, not just in a toast.
-   A reader has to be able to tell whether the prose was checked, and what
-   came out of it, from the paper alone. Removals are listed rather than
-   quietly dropped: what a fact-checker struck is itself a finding about the
-   draft, and hiding it would defeat the point of running the check. */
-function narrativeAudit(){
-  if(!NARRATIVE.verified){
-    return `<div class="callout warn"><b>Claim check did not run.</b> The drafted prose has
-      <b>not</b> been checked against the recorded data${NARRATIVE.verifyError?` (${esc(NARRATIVE.verifyError)})`:""}.
-      Treat the narrative sections as unverified and read them against the tables before circulating this report.</div>`;
-  }
-  const n=NARRATIVE.removed.length;
-  if(!n) return `<p class="byline-gen">A second adversarial pass re-read the draft against the recorded data and found no unsupported claim.</p>`;
-  const items=NARRATIVE.removed.map(x=>`<li><span class="muted">[${esc(x.section)}]</span>
-      “${esc(x.sentence)}” — ${esc(x.why||"not supported by the recorded data")}</li>`).join("");
-  return `<div class="callout"><b>Claim check: ${n} statement${n===1?"":"s"} removed.</b>
-    A second adversarial pass re-read the draft against the recorded data and struck the following,
-    which are <b>not</b> present in the report above:
-    <ul class="audit-list">${items}</ul></div>`;
-}
-
 function buildPaper(){
   FIGN=0; TABN=0;   // numbering restarts for every assembly
   const p=curProj(), q=m(firstOf("question")), d=curData(), r=projResults();
@@ -4090,10 +4041,9 @@ function buildPaper(){
   const author=AUTH.user?`${esc(AUTH.user)} (GitHub)`:"Unattributed session";
   const mode=r?"Measured — this project's recorded run":(d?"Measured — run in this session":"No run recorded");
   const runLabel=state.run.mode==="live"?"live run":(state.run.mode==="replay"?"replayed trace":"no run in this session");
-  const abstract=NARRATIVE.abstract||assembledAbstract();
-  const discussion=NARRATIVE.discussion||assembledDiscussion();
-  const limits=NARRATIVE.limitations||assembledLimitations();
-  const wrote=NARRATIVE.source==="model";
+  const abstract=assembledAbstract();
+  const discussion=assembledDiscussion();
+  const limits=assembledLimitations();
 
   return `
     <h1>${esc(p.name)} — computational screening report</h1>
@@ -4107,8 +4057,6 @@ function buildPaper(){
 
     <section><h2>Abstract</h2>
       <p>${esc(abstract)}</p>
-      ${wrote?`<p class="byline-gen">Abstract, discussion and limitations drafted by ${esc(NARRATIVE.model||"a language model")} from this project's recorded data. All numbers, figures, tables and references in this report are assembled from the run record, not written by the model.</p>`:""}
-      ${wrote?narrativeAudit():""}
       ${(p.scaffolded&&!r)?`<div class="callout warn"><b>Plan-stage project.</b> This project's question, hypotheses and experiment design were proposed by a model as a starting point and have not been grounded in sources or tested by a run. Nothing below is a finding.</div>`:""}
     </section>
 
@@ -4135,9 +4083,6 @@ function buildPaper(){
 
 function openReport(){
   $("#paper").innerHTML=buildPaper();
-  $("#reportNote").textContent=NARRATIVE.source==="model"
-    ? `Narrative drafted by ${NARRATIVE.model||"model"}`
-    : "Assembled from the project graph";
   $("#reportOv").classList.add("open");
   document.body.style.overflow="hidden";
   $("#reportOv").scrollTop=0;
@@ -4155,38 +4100,9 @@ function exportPDF(){
   setTimeout(()=>window.print(),260);
 }
 
-async function writeNarrative(){
-  if(!AUTH.user){ toast("Sign in to draft the narrative"); return; }
-  const btn=$("#reportWrite"); const label=btn.querySelector(".btn-label");
-  const was=label.textContent; label.textContent="Writing…"; btn.disabled=true;
-  try{
-    const r=await api("/api/narrative",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({project:curProj(),metrics:(curData().stats||[])})});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j.ok){
-      // The assembled report is already complete, so a failure here is a
-      // declined upgrade, not a broken export.
-      toast(j.reason||"Narrative unavailable — keeping the assembled text");
-      return;
-    }
-    NARRATIVE.abstract=j.abstract||""; NARRATIVE.discussion=j.discussion||"";
-    NARRATIVE.limitations=j.limitations||""; NARRATIVE.source="model";
-    NARRATIVE.model=[j.provider,j.model].filter(Boolean).join(" · ");
-    NARRATIVE.verified=!!j.verified; NARRATIVE.verifyError=j.verifyError||null;
-    NARRATIVE.removed=Array.isArray(j.removed)?j.removed:[];
-    openReport();
-    const n=NARRATIVE.removed.length;
-    toast(!NARRATIVE.verified ? "Drafted, but the claim check did not run — review carefully"
-      : n ? `Drafted · ${n} unsupported claim${n===1?"":"s"} removed`
-          : "Drafted · claim check found nothing unsupported");
-  }catch(e){ toast("Could not reach the server — keeping the assembled text"); }
-  finally{ label.textContent=was; btn.disabled=false; }
-}
-
 $("#reportBtn").addEventListener("click",openReport);
 $("#reportClose").addEventListener("click",closeReport);
 $("#reportPrint").addEventListener("click",exportPDF);
-$("#reportWrite").addEventListener("click",writeNarrative);
 addEventListener("keydown",e=>{
   if(e.key==="Escape"&&$("#reportOv").classList.contains("open")){ e.preventDefault(); closeReport(); }
 });
