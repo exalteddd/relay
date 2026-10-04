@@ -484,7 +484,9 @@ def run():
 # --- static frontend ----------------------------------------------------
 @app.get("/")
 def index():
-    return send_from_directory(ROOT, "landing.html")
+    response = send_from_directory(ROOT, "landing.html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/workspace")
