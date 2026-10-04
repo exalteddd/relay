@@ -384,15 +384,21 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .cmdbar{left:calc(var(--bl,300px) + 20px);right:calc(var(--br,204px) + 20px);
   bottom:18px;transform:none;width:auto;max-width:560px;margin-inline:auto;z-index:28}
 .minimap[hidden]{display:none}
-.cmd-ctx{display:flex;gap:6px;margin:0 0 7px 4px;flex-wrap:wrap}
-.ctx-chip{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 9px;box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:6px}
+.canvas.compact-overlays .cmdbar{left:16px;right:16px;bottom:66px;max-width:none;width:auto}
+.canvas.compact-overlays .zoomctl{max-width:calc(100% - 32px);overflow-x:auto;scrollbar-width:none}
+.canvas.compact-overlays .zoomctl>*{flex-shrink:0}
+.cmd-wrap{min-width:0;max-width:100%}
+.ctx-chip .x{flex-shrink:0}
+
+.cmd-ctx{min-width:0;display:flex;gap:6px;margin:0 0 7px 4px;flex-wrap:wrap}
+.ctx-chip{max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 9px;box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:6px}
 .ctx-chip .x{color:var(--ink-3);font-weight:700}
 .cmd-wrap{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 16px;box-shadow:var(--shadow-md)}
 .cmd-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
 .cmd-wrap .plus-btn{display:grid;place-items:center;width:26px;height:26px;flex:0 0 auto;padding:0;
   background:none;border:0;border-radius:7px;color:var(--ink-3);cursor:pointer;transition:background .14s,color .14s}
 .cmd-wrap .plus-btn:hover{background:var(--surface-2);color:var(--accent)}
-.cmd-wrap input{flex:1;border:0;background:transparent;font:inherit;color:var(--ink);padding:5px 0}
+.cmd-wrap input{flex:1;min-width:0;width:0;border:0;background:transparent;font:inherit;color:var(--ink);padding:5px 0}
 .cmd-wrap input::placeholder{color:var(--ink-3)}
 .cmd-wrap input:focus{outline:none}
 .send-btn{width:34px;height:34px;border-radius:50%;border:0;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:0 0 auto;transition:background .14s}
@@ -780,7 +786,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
   .pane.maximized{height:100%}
   .canvas{min-height:180px}
   .app.pane-open .canvas{flex:0 0 48%}
-  .cmdbar{width:calc(100% - 32px)}
+  .cmdbar{width:auto}
   .minimap{display:none}
   .crumb-btn{max-width:52vw}
 }
@@ -1691,7 +1697,10 @@ function layoutOverlays(){
   const z=document.querySelector(".zoomctl"), mm=document.querySelector(".minimap");
   const w=el.canvas.clientWidth;
   if(mm) mm.hidden = w < 880;
-  el.canvas.style.setProperty("--bl",(z?z.offsetWidth:0)+"px");
+  const controlsWidth=z?z.scrollWidth:0;
+  const mapWidth=mm&&!mm.hidden?mm.offsetWidth:0;
+  el.canvas.classList.toggle("compact-overlays",w-controlsWidth-mapWidth-40<300);
+  el.canvas.style.setProperty("--bl",controlsWidth+"px");
   el.canvas.style.setProperty("--br",(mm&&!mm.hidden?mm.offsetWidth:0)+"px");
 }
 addEventListener("resize",layoutOverlays);
