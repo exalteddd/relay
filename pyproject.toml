@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "second-brain-lab"
+version = "0.1.0"
+description = "Agentic research lab with long-term memory: literature -> grounded claims -> hypotheses"
+requires-python = ">=3.11"
+dependencies = ["requests>=2.31"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.0"]
+ui = ["streamlit>=1.46"]
+omnigent = ["omnigent>=0.16"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+brain = "brain.cli:main"
+
+[tool.setuptools]
+packages = ["brain", "medlab"]

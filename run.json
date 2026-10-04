@@ -1,0 +1,78 @@
+{
+  "source": "synthetic_fixture",
+  "elapsed_s": 15.0,
+  "n_compounds": 5600,
+  "n_active": 553,
+  "base_rate": 0.0888,
+  "n_train": 3393,
+  "n_test": 2207,
+  "roc_auc": 0.752,
+  "ef_top1pct": 11.26,
+  "ef_top5pct": 7.17,
+  "control_random_ef1": 1.05,
+  "control_yscramble_auc": 0.52,
+  "assays_saved_factor": 11.26,
+  "top_hits": [
+    {
+      "cid": 900000024,
+      "smiles": "O=C(O)COC(=O)C(S)Cc1ccccc1",
+      "score": 0.993,
+      "label": 1
+    },
+    {
+      "cid": 900000046,
+      "smiles": "CCOC(=O)C(S)Cc1ccccn1",
+      "score": 0.99,
+      "label": 1
+    },
+    {
+      "cid": 900000242,
+      "smiles": "O=C(O)CONC(=O)C1CCCCC1",
+      "score": 0.986,
+      "label": 1
+    },
+    {
+      "cid": 900000349,
+      "smiles": "COc1cccc(CC(S)C(=O)OCC(=O)O)c1",
+      "score": 0.983,
+      "label": 1
+    },
+    {
+      "cid": 900000274,
+      "smiles": "O=C(O)COC(=O)C(S)Cc1ncccn1",
+      "score": 0.983,
+      "label": 1
+    },
+    {
+      "cid": 900000374,
+      "smiles": "O=C(O)COC(=O)C(S)Cc1ccccc1Cl",
+      "score": 0.98,
+      "label": 1
+    },
+    {
+      "cid": 900000235,
+      "smiles": "O=C(OCCO)C1CCCCC1",
+      "score": 0.977,
+      "label": 1
+    },
+    {
+      "cid": 900000684,
+      "smiles": "O=C(O)COC(=O)C(S)CN1CCNCC1",
+      "score": 0.977,
+      "label": 1
+    },
+    {
+      "cid": 900000371,
+      "smiles": "CCOC(=O)C(S)Cc1ccccc1Cl",
+      "score": 0.977,
+      "label": 1
+    },
+    {
+      "cid": 900000149,
+      "smiles": "O=C(O)COC(=O)C(S)CN1CCCCC1",
+      "score": 0.977,
+      "label": 1
+    }
+  ],
+  "notes": []
+}

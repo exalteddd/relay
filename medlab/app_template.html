@@ -1,0 +1,278 @@
+<title>NDM-1 Screening Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an operable console. Left = question + agent run log; right = live result. Stacks on mobile. */
+:root{
+ --paper:#FAF9F5;--sunken:#F2F0EA;--surface:#FFFFFF;--ink:#17181C;--ink-2:#4A4C52;--ink-3:#6E7076;
+ --rule:#DCD8CE;--rule-strong:#17181C;--accent:#0E6F68;--accent-2:#0A5A54;--accent-soft:#E3F0EE;--on-accent:#FAF9F5;
+ --good:#0E6F68;--warn:#8A5A00;--warn-soft:#F6EEDC;
+ --serif:'Source Serif 4',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --paper:#141517;--sunken:#1B1C1F;--surface:#1E1F22;--ink:#ECE9E2;--ink-2:#B9B6AE;--ink-3:#8E8B84;
+ --rule:#33343A;--rule-strong:#ECE9E2;--accent:#4FB8AC;--accent-2:#6CCBC0;--accent-soft:#1C2E2C;--on-accent:#141517;
+ --good:#4FB8AC;--warn:#E2B45A;--warn-soft:#2B2416;color-scheme:dark;}}
+:root[data-theme="dark"]{
+ --paper:#141517;--sunken:#1B1C1F;--surface:#1E1F22;--ink:#ECE9E2;--ink-2:#B9B6AE;--ink-3:#8E8B84;
+ --rule:#33343A;--rule-strong:#ECE9E2;--accent:#4FB8AC;--accent-2:#6CCBC0;--accent-soft:#1C2E2C;--on-accent:#141517;
+ --good:#4FB8AC;--warn:#E2B45A;--warn-soft:#2B2416;color-scheme:dark;}
+*{box-sizing:border-box;}
+body{background:var(--paper);color:var(--ink);font:400 15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:22px 72px;}
+.label{font:500 .7rem/1.2 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+a{color:var(--accent);}
+/* header */
+.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:12px;}
+.brand{font:600 1.35rem/1 var(--serif);letter-spacing:-.01em;}
+.brand span{color:var(--ink-3);font-weight:400;}
+.tagline{color:var(--ink-2);font-size:.92rem;flex:1;min-width:200px;}
+.tbtn{font:500 .68rem/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;background:none;border:1px solid var(--rule);color:var(--ink-2);border-radius:3px;padding:7px 9px;cursor:pointer;}
+/* grid */
+.cols{display:grid;grid-template-columns:400px 1fr;gap:26px;margin-top:22px;align-items:start;}
+@media (max-width:860px){.cols{grid-template-columns:1fr;}}
+.panel{min-width:0;}
+.card{border:1px solid var(--rule);border-radius:4px;background:var(--surface);padding:16px;}
+h2{font:500 .72rem/1.2 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px;}
+/* question */
+.qbox{width:100%;border:0;border-bottom:1.5px solid var(--rule-strong);background:transparent;color:var(--ink);
+ font:400 1.15rem/1.4 var(--serif);padding:4px 0 8px;resize:none;}
+.qbox:focus{outline:none;border-bottom-color:var(--accent);}
+.runbtn{margin-top:14px;width:100%;background:var(--accent);color:var(--on-accent);border:0;border-radius:3px;
+ font:500 .95rem/1 var(--sans);padding:12px;cursor:pointer;transition:background .15s;}
+.runbtn:hover{background:var(--accent-2);} .runbtn:disabled{opacity:.5;cursor:default;}
+.hint{color:var(--ink-3);font-size:.8rem;margin-top:10px;}
+/* agent log */
+.log{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px;}
+.log li{display:grid;grid-template-columns:18px 1fr;gap:9px;opacity:.32;transition:opacity .3s;}
+.log li.on{opacity:1;} .log li.done .dot{background:var(--accent);border-color:var(--accent);}
+.log .dot{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink-3);margin-top:4px;}
+.log li.run .dot{border-color:var(--accent);animation:pulse 1.1s infinite;}
+@keyframes pulse{50%{opacity:.3;}}
+.log .who{font:500 .66rem/1.3 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);}
+.log .msg{font-size:.9rem;}
+/* right side reveal */
+.result{display:grid;gap:18px;}
+.hidden{display:none;}
+.gate{background:var(--warn-soft);border:1px solid var(--warn);border-radius:4px;padding:12px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.gate .label{color:var(--warn);}
+.approve{background:var(--accent);color:var(--on-accent);border:0;border-radius:3px;font:500 .82rem var(--sans);padding:8px 14px;cursor:pointer;}
+/* tests */
+.tests{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media (max-width:520px){.tests{grid-template-columns:1fr;}}
+.test{border:1px solid var(--rule);border-radius:4px;padding:12px;font-size:.86rem;}
+.test.pick{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.test .nm{font-weight:600;font-size:.92rem;margin-bottom:4px;}
+.test .sc{color:var(--ink-3);font-size:.76rem;margin-top:8px;}
+.badge{display:inline-block;font:500 .64rem/1 var(--sans);letter-spacing:.05em;text-transform:uppercase;padding:3px 6px;border-radius:2px;background:var(--accent);color:var(--on-accent);margin-top:8px;}
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);border-top:1.5px solid var(--rule-strong);border-bottom:1.5px solid var(--rule-strong);}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr);}}
+.kpis>div{padding:12px 10px;border-right:1px solid var(--rule);} .kpis>div:last-child{border-right:0;}
+.kpis .v{font:600 1.55rem/1 var(--serif);font-variant-numeric:lining-nums tabular-nums;}
+.kpis .l{font-size:.72rem;color:var(--ink-2);margin-top:3px;}
+/* slider + live EF */
+.sliderrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;}
+input[type=range]{width:100%;accent-color:var(--accent);margin-top:8px;}
+.efbar-track{height:26px;background:var(--sunken);border-radius:3px;margin-top:10px;position:relative;overflow:hidden;}
+.efbar{height:100%;background:var(--accent);width:0;transition:width .25s;}
+.efbar-lab{position:absolute;left:8px;top:0;line-height:26px;font:600 .82rem var(--mono);color:var(--on-accent);}
+.saved{font-size:.86rem;color:var(--ink-2);margin-top:8px;}
+.saved b{color:var(--ink);}
+/* controls */
+.ctrls{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ctrl{border:1px solid var(--rule);border-radius:4px;padding:10px;font-size:.82rem;}
+.ctrl .v{font:600 1.1rem var(--serif);font-variant-numeric:tabular-nums;} .pass{color:var(--good);}
+/* shortlist */
+.tw{overflow-x:auto;} table{border-collapse:collapse;width:100%;font-size:.82rem;}
+th{font:500 .66rem/1.2 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:8px 10px 6px 0;}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule);vertical-align:middle;}
+td.mono{font-family:var(--mono);font-size:.76rem;} .hit{color:var(--good);font-weight:600;} .miss{color:var(--ink-3);}
+.synth{background:var(--warn-soft);border-left:2px solid var(--warn);padding:9px 12px;font-size:.82rem;border-radius:3px;}
+.foot{color:var(--ink-3);font-size:.78rem;margin-top:26px;border-top:1px solid var(--rule);padding-top:10px;}
+.placeholder{color:var(--ink-3);font-size:.95rem;text-align:center;padding:40px 16px;border:1px dashed var(--rule);border-radius:4px;}
+</style>
+
+<div class="wrap">
+ <div class="top">
+  <div class="brand">NDM-1 <span>Screening Console</span></div>
+  <div class="tagline">Triage thousands of compounds to a ranked, evidence-backed shortlist of candidate NDM-1 inhibitors.</div>
+  <button class="tbtn" id="theme" type="button">Dark</button>
+ </div>
+
+ <div class="cols">
+  <!-- LEFT: input + agent run -->
+  <div class="panel">
+   <div class="card">
+    <h2>Research question</h2>
+    <textarea class="qbox" id="q" rows="3">Which untested compounds are most likely to inhibit NDM-1 and restore carbapenem activity?</textarea>
+    <button class="runbtn" id="run" type="button">Run discovery loop &rarr;</button>
+    <div class="hint">Six Omnigent agents run the loop and adapt after the result. A human approval gate sits before any compute.</div>
+    <ul class="log" id="log"></ul>
+   </div>
+  </div>
+
+  <!-- RIGHT: live result -->
+  <div class="panel">
+   <div id="empty" class="placeholder">Press <b>Run</b> to start the discovery loop. Results appear here.</div>
+   <div class="result hidden" id="res">
+
+    <div class="gate hidden" id="gate">
+     <span class="label">Approval gate</span>
+     <span style="flex:1;min-width:160px;font-size:.88rem">Planner chose Test&nbsp;1 (ligand-based screen). Approve to spend compute.</span>
+     <button class="approve" id="approve" type="button">Approve &amp; run test</button>
+    </div>
+
+    <div class="card hidden" id="plancard">
+     <h2>Experiment planner &mdash; two candidate tests</h2>
+     <div class="tests">
+      <div class="test pick">
+       <div class="nm">T1 &middot; Ligand-based screen</div>
+       Learn the patterns in compounds already tested against NDM-1, then rank untested ones.
+       <div class="sc mono">learning 5 &middot; feasibility 5 &middot; cost 1 &rarr; rank 25</div>
+       <span class="badge">Chosen</span>
+      </div>
+      <div class="test">
+       <div class="nm">T2 &middot; Structure docking</div>
+       Dock candidates into the NDM-1 zinc site. Orthogonal evidence, but slow and finicky.
+       <div class="sc mono">learning 3 &middot; feasibility 2 &middot; cost 4 &rarr; rank 1.5</div>
+      </div>
+     </div>
+     <div class="hint">Chosen on cost &times; feasibility and because it matches the measured endpoint. T2 is kept as a follow-up on the shortlist.</div>
+    </div>
+
+    <div class="card hidden" id="metrics">
+     <h2>Result &mdash; held-out performance</h2>
+     <div class="kpis">
+      <div><div class="v" id="k-n">&mdash;</div><div class="l">compounds ranked</div></div>
+      <div><div class="v" id="k-auc">&mdash;</div><div class="l">ranking accuracy (AUC)</div></div>
+      <div><div class="v" id="k-ef">&mdash;</div><div class="l">enrichment, top 1%</div></div>
+      <div><div class="v" id="k-base">&mdash;</div><div class="l">base hit rate</div></div>
+     </div>
+    </div>
+
+    <div class="card hidden" id="budget">
+     <h2>How many assays can you afford?</h2>
+     <div class="sliderrow">
+      <span style="font-size:.88rem">Test the top <b class="mono" id="kpct">1%</b> of the ranked list</span>
+      <span class="mono" id="kn" style="color:var(--ink-3)"></span>
+     </div>
+     <input type="range" id="slider" min="1" max="25" value="1" step="1">
+     <div class="efbar-track"><div class="efbar" id="efbar"></div><div class="efbar-lab" id="efbarlab"></div></div>
+     <div class="saved" id="saved"></div>
+    </div>
+
+    <div class="card hidden" id="controlcard">
+     <h2>Did it cheat? Controls</h2>
+     <div class="ctrls">
+      <div class="ctrl"><div class="v" id="c-rand">&mdash;</div>random ranking enrichment<br><span class="mono" style="color:var(--ink-3)">≈1 means no free signal</span></div>
+      <div class="ctrl"><div class="v" id="c-scr">&mdash;</div>shuffled-label accuracy<br><span class="mono" style="color:var(--ink-3)">≈0.5 means it can't fake it</span></div>
+     </div>
+     <div class="hint" id="verdict"></div>
+    </div>
+
+    <div class="card hidden" id="listcard">
+     <h2>Top of the shortlist</h2>
+     <div class="tw"><table>
+      <thead><tr><th>#</th><th>Candidate (SMILES)</th><th>Score</th><th>Known label</th></tr></thead>
+      <tbody id="rows"></tbody>
+     </table></div>
+     <div class="hint">Highest-ranked structures are thiol-carboxylate and hydroxamate chemotypes &mdash; the known metallo-&beta;-lactamase inhibitor families, recovered by the model.</div>
+    </div>
+
+    <div class="synth" id="synth"></div>
+   </div>
+  </div>
+ </div>
+
+ <div class="foot">
+  In-silico triage, not a validated therapeutic &mdash; it reprioritizes candidates, it does not confirm binding. Numbers are computed by the real engine in this project's <span class="mono">medlab/</span> package. Orchestration: Omnigent. Data: PubChem BioAssay &middot; Europe PMC. Not medical advice.
+ </div>
+</div>
+
+<script>
+const DATA = __DATA__;
+(function(){
+ const $=id=>document.getElementById(id);
+ const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+ // theme
+ const root=document.documentElement,tb=$("theme");
+ const dark=()=>{const t=root.getAttribute("data-theme");return t?t==="dark":matchMedia("(prefers-color-scheme:dark)").matches;};
+ const setLab=()=>tb.textContent=dark()?"Light":"Dark";
+ tb.onclick=()=>{root.setAttribute("data-theme",dark()?"light":"dark");setLab();};setLab();
+
+ // agent run log
+ const steps=[
+  ["Literature","Pulled evidence from Europe PMC: known inhibitors use zinc-binding groups (thiols, carboxylates, hydroxamates)."],
+  ["Insight","Hypothesis: compounds resembling known actives with a zinc-binding group rank near the top."],
+  ["Planner","Proposed two tests; scored on learning, feasibility, cost; chose the ligand-based screen."],
+  ["Runner","Trained on labeled bioassay data; ranking "+DATA.n_test.toLocaleString()+" untested compounds."],
+  ["Analysis","Scored the ranking and ran two controls to rule out cheating."],
+  ["Knowledge graph","Recorded evidence with provenance; sharpened the next question."],
+ ];
+ const log=$("log");
+ steps.forEach((s,i)=>{
+  const li=document.createElement("li");li.id="s"+i;
+  li.innerHTML='<div class="dot"></div><div><div class="who">'+s[0]+'</div><div class="msg">'+s[1]+'</div></div>';
+  log.appendChild(li);
+ });
+
+ function compute(frac){
+  const n=DATA.ranked.length, k=Math.max(1,Math.round(frac*n));
+  let hits=0; for(let i=0;i<k;i++) hits+=DATA.ranked[i].y;
+  const ef=(hits/k)/DATA.base_rate;
+  return {k,ef,hits};
+ }
+ function fillSlider(){
+  const pct=+$("slider").value, frac=pct/100, {k,ef}=compute(frac);
+  $("kpct").textContent=pct+"%"; $("kn").textContent="("+k.toLocaleString()+" compounds)";
+  const maxEF=Math.min(1/DATA.base_rate, 13);
+  $("efbar").style.width=Math.min(100,ef/maxEF*100)+"%";
+  $("efbarlab").textContent=ef.toFixed(1)+"× richer than random";
+  $("saved").innerHTML="At this budget you run <b>"+(1/(ef*DATA.base_rate)>=1?Math.round(ef).toLocaleString():"~"+ef.toFixed(1))+"× fewer assays</b> per confirmed hit than testing at random.";
+ }
+
+ function reveal(){
+  $("empty").classList.add("hidden"); $("res").classList.remove("hidden");
+  // metrics
+  $("k-n").textContent=DATA.n_test.toLocaleString();
+  $("k-auc").textContent=DATA.auc.toFixed(2);
+  $("k-ef").textContent=DATA.ef1.toFixed(1)+"×";
+  $("k-base").textContent=(DATA.base_rate*100).toFixed(1)+"%";
+  $("c-rand").textContent=DATA.rand_ef1.toFixed(2)+"×";
+  $("c-scr").textContent=DATA.auc_scramble.toFixed(2);
+  const clean=DATA.rand_ef1<2 && DATA.auc_scramble<0.6;
+  $("verdict").innerHTML=clean?'<span class="pass">Controls pass.</span> Random ranking gives no real gain and shuffled labels collapse to chance &mdash; the enrichment is real signal, not leakage.':'Controls flagged a problem.';
+  // shortlist
+  const rows=$("rows");rows.innerHTML="";
+  DATA.top.forEach((h,i)=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML='<td class="mono">'+(i+1)+'</td><td class="mono">'+h.smiles+'</td><td class="mono">'+h.score.toFixed(2)+'</td>'+
+    '<td>'+(h.label?'<span class="hit">active</span>':'<span class="miss">inactive</span>')+'</td>';
+   rows.appendChild(tr);
+  });
+  $("synth").innerHTML="<b>Note:</b> this run uses a labeled synthetic library (live data APIs are firewalled in the build sandbox), so it proves the pipeline end to end. One flag (<span class='mono'>--aid</span>) points the same code at the live PubChem NDM-1 assay for the real-data result.";
+  ["plancard","metrics","budget","controlcard","listcard"].forEach(id=>$(id).classList.remove("hidden"));
+  $("slider").oninput=fillSlider; fillSlider();
+ }
+
+ function runLoop(){
+  $("run").disabled=true; $("empty").classList.add("hidden"); $("res").classList.remove("hidden");
+  let i=0;
+  const dur=reduce?0:850;
+  function step(){
+   if(i>0){const p=$("s"+(i-1));p.classList.remove("run");p.classList.add("done");}
+   if(i>=steps.length){ $("gate").classList.remove("hidden"); return; }
+   const li=$("s"+i);li.classList.add("on","run");
+   if(steps[i][0]==="Planner"){ $("plancard").classList.remove("hidden"); }
+   i++; setTimeout(step,dur);
+  }
+  if(reduce){steps.forEach((_,j)=>{$("s"+j).classList.add("on","done");});$("plancard").classList.remove("hidden");$("gate").classList.remove("hidden");}
+  else step();
+ }
+ $("run").onclick=runLoop;
+ $("approve").onclick=()=>{ $("gate").classList.add("hidden"); reveal(); $("budget").scrollIntoView({behavior:reduce?"auto":"smooth",block:"center"}); };
+})();
+</script>

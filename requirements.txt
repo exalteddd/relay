@@ -1,0 +1,6 @@
+requests>=2.31
+anthropic>=0.40
+openai>=1.0
+streamlit>=1.46
+omnigent>=0.16
+pytest>=8
