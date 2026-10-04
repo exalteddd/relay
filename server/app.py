@@ -307,16 +307,24 @@ def refine_question():
     if not question:
         return jsonify(error="Nothing to sharpen"), 400
     question = question[:500]
+    from brain import prompts
+    from brain.config import load_config
+    from brain.llm import LLM
+
+    cfg = load_config()
+    # Name the actual problem. "Could not reach the model" sent people looking
+    # for a network fault when the usual cause is an unset key on this server.
+    if cfg.provider == "openai" and not cfg.openai_api_key:
+        return jsonify(error="No model key on this server. Set OPENAI_API_KEY and redeploy."), 503
+    if cfg.provider == "anthropic" and not cfg.anthropic_api_key:
+        return jsonify(error="No model key on this server. Set ANTHROPIC_API_KEY and redeploy."), 503
     try:
-        from brain import prompts
-        from brain.config import load_config
-        from brain.llm import LLM
-        llm = LLM(load_config())
-        out = llm.json("refine", prompts.REFINE_QUESTION, f"Question: {question}",
-                       fast=True, max_tokens=700, context={"question": question})
+        out = LLM(cfg).json("refine", prompts.REFINE_QUESTION, f"Question: {question}",
+                            fast=True, max_tokens=700, context={"question": question})
     except Exception as exc:
         app.logger.warning("refine failed: %s", exc)
-        return jsonify(error="Could not reach the model"), 502
+        reason = str(exc)[:140] or exc.__class__.__name__
+        return jsonify(error=f"The model call failed ({cfg.fast_model}): {reason}"), 502
     return jsonify(
         refined=str(out.get("refined") or question)[:500],
         tooBroad=bool(out.get("too_broad")),
