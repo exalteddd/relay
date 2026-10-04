@@ -269,6 +269,11 @@ def save_reviews(project: str, reviews: list[dict]) -> dict:
         if not h["supporting_claim_ids"]:
             verdict = "drop"
             r.setdefault("issues", []).append("no valid supporting claims")
+        # The critic's novelty finding is a verdict, not a note: a hypothesis
+        # the literature has already settled is not one worth testing.
+        if r.get("already_established"):
+            verdict = "drop"
+            r.setdefault("issues", []).append("already established in the cited literature")
         if verdict == "drop":
             h["status"] = "rejected"
         elif verdict == "revise" and r.get("revised_statement"):
@@ -277,7 +282,11 @@ def save_reviews(project: str, reviews: list[dict]) -> dict:
         else:
             h["status"] = "proposed"
         h["score"] = round(sum(float(h.get(k, 3) or 3) for k in ("novelty", "feasibility", "testability")) / 3, 2)
-    hyps.sort(key=lambda h: (h["status"] == "rejected", -h["score"], -h["confidence"]))
+        # `score` is the proposer grading its own work; `confidence` is the
+        # critic's independent read. Rank on both, so an unconvinced critic can
+        # outweigh a self-flattering score instead of only breaking its ties.
+        h["rank_score"] = round(0.5 * (h["score"] / 5.0) + 0.5 * h["confidence"], 3)
+    hyps.sort(key=lambda h: (h["status"] == "rejected", -h["rank_score"], -h["score"]))
     proj.write_json("hypotheses/hypotheses.json", hyps)
     for h in hyps:
         proj.write_text(f"hypotheses/{h['id']}.md", render_hypothesis(h, by_id))

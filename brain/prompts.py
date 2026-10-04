@@ -77,6 +77,13 @@ against the claims it cites.
 For each, check: Is it actually supported by the cited claims? Is it already established \
 (i.e. not novel)? Is it falsifiable and specific? Is the proposed experiment able to test it?
 Verdict: keep | revise (give a sharper revised_statement) | drop.
+Drop it when the cited claims do not support it and no rewording would fix that, \
+when it is already established, when it is not falsifiable as posed, or when the \
+proposed experiment could not distinguish it from the obvious alternatives. Revise \
+only when a sharper statement genuinely repairs the problem. Do not default to \
+revise: it is the right verdict for a fixable hypothesis, not a way to avoid \
+judging a bad one. Verdicts should differ across a set unless the set really is \
+uniform.
 prior_confidence: your probability (0-1) that the hypothesis is true, before any experiment.
 
 Return JSON: {"reviews": [{"id": "H01", "verdict": "...", "issues": ["..."], \
