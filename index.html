@@ -949,7 +949,8 @@ function loadPersist(){
     if(typeof p.editing==="boolean") state.editing=p.editing;
     if(typeof p.question==="string") state.question=p.question;
     if(p.opts) state.opts=Object.assign(state.opts,p.opts);
-    if(p.project && state.projects[p.project]) state.project=p.project;
+    // Applied after user projects are registered: at this point they do not
+    // exist yet, so a saved selection of one would be discarded.
     if(p.view) state.view=p.view;
     if(p.previews) state.previews=p.previews;
     if(p.pos){
@@ -965,9 +966,18 @@ function loadPersist(){
       for(const id of p.deletedProjects){ delete state.projects[id]; PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id); }
       state.deletedProjects=p.deletedProjects.slice();
     }
+    if(p.project && state.projects[p.project]) state.project=p.project;
     if(!state.projects[state.project]) state.project=PROJECT_ORDER[0];
-    if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
-    if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
+    if(p.extraNodes){ for(const pid in p.extraNodes){
+      const proj=state.projects[pid]; if(!proj||!BASE[pid]) continue;   // whole-saved projects already have theirs
+      const have=new Set(proj.nodes.map(n=>n.id));
+      for(const n of p.extraNodes[pid]) if(!have.has(n.id)){ proj.nodes.push(n); have.add(n.id); }
+    } }
+    if(p.extraEdges){ for(const pid in p.extraEdges){
+      const proj=state.projects[pid]; if(!proj||!BASE[pid]) continue;
+      const have=new Set(proj.edges.map(e=>e.from+">"+e.to));
+      for(const e of p.extraEdges[pid]) if(!have.has(e.from+">"+e.to)){ proj.edges.push(e); have.add(e.from+">"+e.to); }
+    } }
   }
 }
 let saveT=null;
@@ -978,8 +988,16 @@ function savePersist(){
       const pos={}, extraNodes={}, extraEdges={};
       for(const pid in state.projects){
         pos[pid]={};
+        for(const n of state.projects[pid].nodes) pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
+      }
+      for(const pid in state.projects){
         const base=BASE[pid];
-        const baseIds=base?new Set(base.nodes.map(n=>n.id)):new Set();
+        // A user-made project is stored whole under userProjects. Diffing it
+        // against a base it does not have put every node into extraNodes as
+        // well, and load applied both -- so the graph doubled on every
+        // reload. Only built-in projects carry a diff.
+        if(!base) continue;
+        const baseIds=new Set(base.nodes.map(n=>n.id));
         for(const n of state.projects[pid].nodes){
           pos[pid][n.id]={x:Math.round(n.x),y:Math.round(n.y)};
           if(!baseIds.has(n.id)){ (extraNodes[pid]=extraNodes[pid]||[]).push(n); }
