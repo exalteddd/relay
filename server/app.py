@@ -540,14 +540,27 @@ def workspace():
     return send_from_directory(ROOT, "index.html")
 
 
+# The landing page ships its own font files so every platform renders the
+# same glyphs: a font CDN hands Windows hinted files and everyone else
+# unhinted ones, and a blocked CDN falls back to whatever the OS has.
+FONT_FILES = {
+    f"assets/fonts/{family}-{subset}.woff2"
+    for family in ("plus-jakarta-sans", "source-serif-4")
+    for subset in ("latin", "latin-ext")
+}
+PUBLIC_FILES = {"assets/relay-mark.svg", "assets/relay-brand-reference.png", *FONT_FILES}
+
+
 @app.get("/<path:filename>")
 def static_files(filename):
     # Serve only deliberately published frontend files, never the repo root.
-    if filename not in {"assets/relay-mark.svg", "assets/relay-brand-reference.png"}:
+    if filename not in PUBLIC_FILES:
         abort(404)
     target = ROOT / filename
     if target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):
         abort(404)
+    if filename in FONT_FILES:
+        return send_from_directory(ROOT, filename, mimetype="font/woff2", max_age=31536000)
     return send_from_directory(ROOT, filename)
 
 

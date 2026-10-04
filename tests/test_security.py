@@ -17,7 +17,7 @@ class SecurityTests(unittest.TestCase):
                      "/medlab/relay_data/events.jsonl", "/assets/../server/app.py"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 404)
-        for path in ("/", "/assets/relay-mark.svg"):
+        for path in ("/", "/assets/relay-mark.svg", "/assets/fonts/source-serif-4-latin.woff2"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             response.close()
