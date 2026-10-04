@@ -499,7 +499,15 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .node-form input:focus,.node-form textarea:focus,.node-form select:focus{
   outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);
 }
-.node-form textarea{resize:vertical;line-height:1.5}
+.node-form input,.node-form textarea{min-height:40px}
+.node-form textarea{resize:vertical;line-height:1.5;min-height:76px}
+.node-form select{
+  appearance:none;-webkit-appearance:none;min-height:40px;line-height:1.5;
+  padding-right:34px;cursor:pointer;
+  background-color:var(--surface-2);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808a9b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 11px center;background-size:14px;
+}
 .node-form .req{font-size:9.5px;color:var(--accent);letter-spacing:.04em;margin-left:5px}
 .menu .mi.danger{color:#c0392b}
 .menu .mi.danger:hover{background:rgba(192,57,43,.1)}
@@ -1994,7 +2002,6 @@ function nodeContextMenu(ev,n){
     `<button class="mi" data-conn="${t}"><span>${esc(s.label)}</span></button>`).join("");
   openMenuAt(ev.clientX,ev.clientY,`
     <div class="m-head">${esc(TYPE_LABEL[n.type])}</div>
-    <button class="mi" data-cm="inspect"><span>Inspect</span></button>
     <button class="mi" data-cm="edit"><span>Edit details…</span></button>
     ${n.type==="result"?`<button class="mi" data-cm="preview"><span>Toggle preview</span></button>`:""}
     <div class="m-sep"></div>
@@ -2005,8 +2012,7 @@ function nodeContextMenu(ev,n){
   `,m=>{
     $$("[data-cm]",m).forEach(b=>b.addEventListener("click",()=>{
       const a=b.dataset.cm; closeMenus();
-      if(a==="inspect") selectNode(n.id);
-      else if(a==="edit") openNodeForm(n.type,null,n.id);
+      if(a==="edit") openNodeForm(n.type,null,n.id);
       else if(a==="preview") togglePreview(n.id);
       else if(a==="delete") deleteNode(n.id);
     }));
