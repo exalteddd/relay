@@ -542,6 +542,10 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
 .sharpen-list{margin:9px 0 0;padding-left:17px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .sharpen-sub{margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.45}
 .sharpen-actions{display:flex;gap:8px;margin-top:12px}
+.empty-state{padding:28px 4px;text-align:left}
+.empty-state h3{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 8px}
+.empty-state p{font-size:13.5px;line-height:1.6;color:var(--ink-2);margin:0 0 18px;max-width:52ch}
+.preview-empty{padding:26px 10px;text-align:center;font-size:12.5px;color:var(--ink-3)}
 .link-node{background:none;border:0;padding:0;font:inherit;color:var(--accent);cursor:pointer;text-align:left}
 .link-node:hover{text-decoration:underline}
 .bullets li .rel-tag{margin-left:8px}
@@ -819,66 +823,10 @@ const TYPE_LABEL={question:"Question",source:"Evidence",hypothesis:"Hypothesis",
 const REL_LABEL={uses:"uses",tests:"tests",produced:"produced",supports:"supports",contradicts:"contradicts"};
 
 /* ============================ chart datasets ============================= */
-const CHART_DATA={
-  verified:{
-    measured:true, tag:"NDM-1 · verified sample",
-    enrichment:{
-      title:"Enrichment vs. screening depth",
-      sub:"Held-out · scaffold split · synthetic fixture",
-      xlabel:"Top fraction screened (%)", ylabel:"Enrichment factor (×)",
-      xmax:100,ymax:12, xticks:[0,25,50,75,100], yticks:[0,3,6,9,12],
-      x:[1,2,5,10,20,35,50,75,100],
-      proposed:[11.3,10.0,7.2,5.0,3.1,2.0,1.6,1.2,1.0],
-      band:[1.6,1.4,1.0,0.8,0.5,0.4,0.3,0.2,0.1],
-      baseline:[1.05,1.04,1.03,1.03,1.02,1.01,1.01,1.0,1.0]
-    },
-    candidates:{
-      title:"Top-ranked candidates", sub:"Predicted P(inhibits) · random-forest",
-      xmax:1, xticks:[0,.2,.4,.6,.8,1], family:true,
-      rows:[
-        {id:"C-014",score:.82,err:.07,family:"thiol-carboxylate"},
-        {id:"C-038",score:.63,err:.06,family:"hydroxamate"},
-        {id:"C-092",score:.47,err:.08,family:"thiol-carboxylate"},
-        {id:"C-105",score:.29,err:.05,family:"bis-thiol"},
-        {id:"C-121",score:.22,err:.06,family:"hydroxamate"}
-      ]
-    },
-    stats:[
-      {val:"0.75",lab:"ROC-AUC",sub:"held-out, scaffold split"},
-      {val:"11.3×",lab:"Enrichment @ top 1%",sub:"7.2× @ top 5%"},
-      {val:"1.05×",lab:"Random control",sub:"y-scramble AUC 0.52"}
-    ]
-  },
-  illustrative:{
-    measured:false, tag:"Illustrative placeholders",
-    enrichment:{
-      title:"Enrichment vs. screening budget",
-      sub:"Illustrative shape — not a measured result",
-      xlabel:"Compounds screened", ylabel:"Enrichment (×)",
-      xmax:210,ymax:8, xticks:[0,50,100,150,200], yticks:[0,2,4,6,8],
-      x:[0,25,50,70,90,110,130,150,170,190,210],
-      proposed:[1,1.8,2.3,2.85,3.35,3.8,4.2,4.6,5.0,5.3,5.6],
-      band:[.3,.4,.45,.5,.55,.6,.62,.64,.66,.68,.7],
-      baseline:[1,1.1,1.15,1.25,1.35,1.45,1.6,1.8,2.0,2.15,2.3]
-    },
-    candidates:{
-      title:"Candidate scores", sub:"Illustrative placeholder values",
-      xmax:1, xticks:[0,.2,.4,.6,.8,1], family:false,
-      rows:[
-        {id:"C-014",score:.82,err:.09,family:"—"},
-        {id:"C-038",score:.61,err:.08,family:"—"},
-        {id:"C-092",score:.44,err:.10,family:"—"},
-        {id:"C-105",score:.27,err:.07,family:"—"},
-        {id:"C-121",score:.20,err:.07,family:"—"}
-      ]
-    },
-    stats:[
-      {val:"~0.7",lab:"ROC-AUC",sub:"illustrative"},
-      {val:"~5×",lab:"Enrichment",sub:"illustrative"},
-      {val:"—",lab:"Controls",sub:"run to populate"}
-    ]
-  }
-};
+/* No fabricated results. A result exists only after a run produces one;
+   until then the interface says there is nothing rather than showing
+   numbers that were typed in by hand. */
+const CHART_DATA={live:null};
 
 /* ============================ project models ============================= */
 function P(id,type,title,summary,status,x,y,meta){return {id,type,title,summary,status,x,y,meta:meta||{}};}
@@ -933,11 +881,9 @@ const BASE={
         approval:"Required before run."
       }),
       P("rank","result","Candidate ranking","5 candidates advanced","done",830,520,{isRank:true,
-        interp:"Five candidates clear the advancement threshold; top two are thiol-carboxylate / hydroxamate chelators.",
         provenance:{run:"r-03",data:"fixture v2",code:"medlab@a1f3",params:"top-k=5"}
       }),
       P("res","result","Results · 03","Enrichment + ranked scores","done",1100,250,{
-        interp:"The diversity-aware screen reaches 11.3× enrichment at the top 1% of the library and holds 7.2× at 5%, against a flat random control (1.05×). y-scramble collapses ROC-AUC to 0.52 — the signal is not an artefact of the split. Practically: about an order of magnitude fewer assays per confirmed hit.",
         provenance:{run:"r-03",data:"synthetic fixture v2 (scaffold split)",code:"medlab@a1f3",params:"RF-400 · top-k=5",approvals:"approved · r-03"}
       }),
       P("next","next","Next experiment","Choose a test","planned",1380,140,{
@@ -959,33 +905,9 @@ const BASE={
       {from:"exp",to:"res",rel:"produced"},
       {from:"res",to:"next",rel:"uses"}
     ]
-  },
-  materials:{
-    id:"materials",name:"Materials stability",icon:"layers",run:"Experiment 01",primaryExp:"mexp",resultNode:"mres",
-    nodes:[
-      P("mq","question","Research question","Which barrier coating best resists thermal cycling?","done",60,280,{
-        objective:"Rank candidate barrier coatings by resistance to delamination under accelerated thermal cycling.",
-        scope:"Screening model over coating/interlayer combinations.",outcome:"Predicted cycles-to-delamination.",data:"8 internal test records.",budget:"≤ 30 tool calls"}),
-      P("mev","source","Evidence","8 sources","done",330,280,{sources:[{src:"Thermal-cycle test logs",meta:"8 records",rel:"supports",body:"Delamination onset across coating stacks."}],relevance:"Labels for the ranking model.",limitations:"Small sample; wide uncertainty."}),
-      P("mh","hypothesis","Hypothesis","An alumina interlayer slows delamination","done",600,280,{statement:"Adding an alumina interlayer raises cycles-to-delamination by relaxing interfacial stress.",predictions:["Alumina stacks rank above bare coatings."],supports:["Interfacial-stress literature"],contradict:["Thickness may reintroduce cracking"],uncertainty:"Moderate.",alt:"Graded interlayer."}),
-      P("mexp","experiment","Experiment 01","Accelerated thermal cycling","planned",870,280,{tests:[{name:"Rank on composition",sel:false,why:"Baseline."},{name:"Stress-aware rank",sel:true,why:"Adds interfacial-stress features."}],method:"Gradient-boosted rank on composition + stress features.",inputs:"8 labelled stacks.",baseline:"Random.",controls:"y-scramble.",params:"top-k=3",cost:"~20 calls",approval:"Required."}),
-      P("mres","result","Results · 01","Delamination onset","done",1140,280,{interp:"Stress-aware ranking separates alumina stacks from bare coatings on predicted cycles-to-delamination.",provenance:{run:"m-01",data:"records v1",code:"medlab@a1f3",params:"GBM · top-k=3",approvals:"approved · m-01"}})
-    ],
-    edges:[{from:"mq",to:"mev",rel:"uses"},{from:"mev",to:"mh",rel:"supports"},{from:"mh",to:"mexp",rel:"tests"},{from:"mexp",to:"mres",rel:"produced"}]
-  },
-  solar:{
-    id:"solar",name:"Solar performance",icon:"sun",run:"Experiment 02",primaryExp:"sexp",resultNode:"sres",
-    nodes:[
-      P("sq","question","Research question","What limits tandem-cell efficiency under load?","done",50,300,{objective:"Identify the dominant loss mechanism limiting tandem-cell efficiency under operating load.",scope:"Screen over interface + bandgap variables.",outcome:"Predicted efficiency contribution per factor.",data:"15 device measurements.",budget:"≤ 35 tool calls"}),
-      P("sev","source","Evidence","15 sources","done",320,300,{sources:[{src:"Device I–V sweeps",meta:"15 devices",rel:"supports",body:"Efficiency vs bandgap and interface treatment."}],relevance:"Labels for the loss-attribution model.",limitations:"Operating-condition drift between batches."}),
-      P("shA","hypothesis","Hypothesis A","Interface recombination dominates","done",590,190,{statement:"Carrier recombination at the sub-cell interface is the primary efficiency loss.",predictions:["Passivated interfaces rank highest."],supports:["Recombination literature"],contradict:["Bandgap mismatch may confound"],uncertainty:"Moderate.",alt:"Bandgap mismatch."}),
-      P("shB","hypothesis","Hypothesis B","Bandgap mismatch limits current","done",590,420,{statement:"Sub-cell bandgap mismatch limits short-circuit current more than recombination does.",predictions:["Matched-bandgap devices lead on Jsc."],supports:["Detailed-balance arguments"],contradict:["Interface quality varies across the set"],uncertainty:"Moderate.",alt:"Interface recombination."}),
-      P("sexp","experiment","Experiment 02","Bandgap sweep","planned",860,300,{tests:[{name:"Attribute to interface",sel:false,why:"Interface-feature model."},{name:"Bandgap sweep",sel:true,why:"Varies sub-cell bandgap directly."}],method:"Regression attribution over device features.",inputs:"15 labelled devices.",baseline:"Mean predictor.",controls:"y-scramble.",params:"top-k=4",cost:"~24 calls",approval:"Required."}),
-      P("sres","result","Results · 02","Efficiency vs bandgap","done",1130,300,{interp:"A bandgap sweep accounts for more of the efficiency variance than interface features alone in this set.",provenance:{run:"s-02",data:"devices v1",code:"medlab@a1f3",params:"attrib · top-k=4",approvals:"approved · s-02"}})
-    ],
-    edges:[{from:"sq",to:"sev",rel:"uses"},{from:"sev",to:"shA",rel:"supports"},{from:"sev",to:"shB",rel:"contradicts"},{from:"shA",to:"sexp",rel:"tests"},{from:"shB",to:"sexp",rel:"tests"},{from:"sexp",to:"sres",rel:"produced"}]
-}};
-let PROJECT_ORDER=["ndm1","materials","solar"];   // user projects append; deleted ones drop out
+  }
+};
+let PROJECT_ORDER=["ndm1"];   // user projects append; deleted ones drop out
 const PROJECT_ICON={
   flask:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>',
   layers:'<path d="M12 3 2 8l10 5 10-5-10-5zM2 14l10 5 10-5M2 11l10 5 10-5"/>',
@@ -995,7 +917,6 @@ const PROJECT_ICON={
 /* ================================ state ================================= */
 let state={
   project:"ndm1",
-  dataMode:"verified",
   theme:null,            // null = follow system
   selection:null,
   pane:{open:false,maximized:false,widthPx:null},
@@ -1010,20 +931,20 @@ let state={
 };
 function curProj(){return state.projects[state.project];}
 function nodeById(id){return curProj().nodes.find(n=>n.id===id);}
-function curData(){return CHART_DATA[state.dataMode];}
+function curData(){return CHART_DATA.live;}
+function hasResults(){return !!CHART_DATA.live;}
 
 /* ============================= persistence ============================== */
 const LSK="relay.state.v3";
 function loadPersist(){
   // clone base
   state.projects={};
-  PROJECT_ORDER=["ndm1","materials","solar"];
+  PROJECT_ORDER=["ndm1"];
   for(const id of PROJECT_ORDER) state.projects[id]=JSON.parse(JSON.stringify(BASE[id]));
   let p=null;
   try{ p=JSON.parse(localStorage.getItem(LSK)||"null"); }catch(e){ p=null; }
   if(p){
     // "live" belongs to a run that is over; a reload has no measured data to show.
-    if(p.dataMode) state.dataMode = (p.dataMode==="live"&&!CHART_DATA.live) ? "verified" : p.dataMode;
     if(p.theme) state.theme=p.theme;
     if(typeof p.editing==="boolean") state.editing=p.editing;
     if(typeof p.question==="string") state.question=p.question;
@@ -1069,7 +990,7 @@ function savePersist(){
         }
       }
       const payload={
-        dataMode:state.dataMode,theme:state.theme,project:state.project,editing:state.editing,
+        theme:state.theme,project:state.project,editing:state.editing,
         question:state.question,opts:state.opts,
         userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
         deletedProjects:state.deletedProjects||[],
@@ -1601,10 +1522,17 @@ function paneNote(n){return `<div class="section"><div class="prose"><p>${esc(n.
 function paneResult(n){
   const tab=n._tab||"plot";
   const d=curData();
+  if(!d){
+    return `<div class="empty-state">
+      <h3>No results yet</h3>
+      <p>This node holds whatever a run measures. Press <b>Run</b> to produce it — the charts, the ranked shortlist and the controls all come from that run, not from stored examples.</p>
+      ${actionRow([{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"}])}
+    </div>`;
+  }
   const tabs=["plot","table","evidence","activity"];
   const tabLabels={plot:"Plot",table:"Table",evidence:"Evidence",activity:"Activity"};
   let inner="";
-  const isLive = state.dataMode==="live" && !!CHART_DATA.live;
+  const isLive = hasResults();
   const measuredNote = isLive
     ? `<div class="illus-pill" title="Computed by this server from the run that just finished">● Measured · ${esc(d.tag||"this run")}</div>`
     : d.measured
@@ -1619,7 +1547,7 @@ function paneResult(n){
   } else if(tab==="table"){
     inner=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px">${measuredNote}</div>${candidateTable(d)}<div style="height:20px"></div>${enrichmentTable(d)}`;
   } else if(tab==="evidence"){
-    const ev=nodeById(curProj().id==="ndm1"?"ev1":(curProj().id==="materials"?"mev":"sev"));
+    const ev=curProj().nodes.find(x=>x.type==="source");
     inner=(ev&&ev.meta.sources)?ev.meta.sources.map(s=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span><span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join(""):`<div class="callout"><span>No linked evidence on this result.</span></div>`;
   } else {
     inner=activityHTML();
@@ -1803,8 +1731,10 @@ function buildPreview(n,ps){
   wrap.style.left=ps.x+"px"; wrap.style.top=ps.y+"px"; wrap.style.width=ps.w+"px";
   if(!ps.collapsed) wrap.style.height=ps.h+"px";
   const tab=ps.tab||"plot";
-  const body = tab==="plot"
-    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">${(state.dataMode==="live"&&CHART_DATA.live)?"Measured · this run":d.measured?"Sample · verified":"Illustrative"}</span></div>${chartBlock("enrichment",d,false)}`
+  const body = !d
+    ? `<div class="preview-empty">No results yet — press Run</div>`
+    : tab==="plot"
+    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">Measured · this run</span></div>${chartBlock("enrichment",d,false)}`
     : candidateTable(d);
   wrap.innerHTML=`
     <div class="preview-head">
@@ -2300,36 +2230,35 @@ $("#crumb").addEventListener("click",()=>{
   openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}`,m=>{ $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);})); });
 });
 $("#provenance").addEventListener("click",()=>{
-  if(!projectHasData()){ toast("This project has no results yet"); return; }
-  openMenu($("#provenance"),`
-    <div class="m-head">Data source${CHART_DATA.live?"":" (sample)"}</div>
-    ${CHART_DATA.live?`<button class="mi" data-mode="live" aria-current="${state.dataMode==='live'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/></svg><span>This run (measured)<div class="mi-sub">${esc(CHART_DATA.live.tag||"live run")}</div></span></button>`:""}
-    <button class="mi" data-mode="verified" aria-current="${state.dataMode==='verified'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span>NDM-1 verified<div class="mi-sub">ROC-AUC 0.75 · 11.3× @1% · clean controls</div></span></button>
-    <button class="mi" data-mode="illustrative" aria-current="${state.dataMode==='illustrative'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg><span>Illustrative placeholders<div class="mi-sub">Generic shapes from the mockups</div></span></button>
-    <div class="m-sep"></div>
-    <div class="m-head">Run provenance</div>
-    <div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Values are labelled <b>sample</b>, never measured findings. A live run (served from your Mac) is tagged <b>Live Omnigent run</b>; a shared demo replays a labelled trace.</div>
-  `,m=>{ $$("[data-mode]",m).forEach(b=>b.addEventListener("click",()=>{ setDataMode(b.dataset.mode); closeMenus(); })); });
+  toast(hasResults()
+    ? "Showing the measured output of the last run"
+    : "No results yet — press Run to produce some");
 });
-function setDataMode(mode){
-  if(mode==="live"&&!CHART_DATA.live) return;   // nothing measured yet
-  state.dataMode=mode; updateProvenance(); savePersist();
-  // refresh any open result pane + previews
-  if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
-  renderPreviews();
-  toast(mode==="live"?"Showing this run's measured results"
-      :mode==="verified"?"Showing NDM-1 verified sample":"Showing illustrative placeholders");
-}
+
 /* Take the charts, shortlist and headline stats from a finished run. The
    bundled sample stays selectable, so a viewer can always see which is which. */
 function adoptRunData(data){
   if(!data||!data.charts) return;
   CHART_DATA.live=data.charts;
-  state.dataMode="live"; updateProvenance();
+  // Write the interpretation from what the run measured, replacing whatever
+  // text the node was carrying. No prose about results that did not happen.
+  const res=nodeById(curProj().resultNode);
+  if(res){
+    const f=v=>v==null?"n/a":(Math.round(v*100)/100);
+    res.meta=Object.assign({},res.meta,{
+      interp:`Ranked ${data.n_compounds??"?"} compounds. ROC-AUC ${f(data.roc_auc)} on a held-out scaffold split; `
+            +`enrichment ${f(data.ef_top1pct)}x at the top 1% and ${f(data.ef_top5pct)}x at 5%. `
+            +`The critic ${data.passed?"accepted":"did not accept"} this result.`
+            +(data.next?` Suggested next: ${data.next}`:""),
+      provenance:{run:"this session",data:data.source||"unknown",
+                  params:`${data.n_test??"?"} held-out compounds`,approvals:"approved in this session"}
+    });
+  }
+  updateProvenance();
   if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
   renderPreviews(); savePersist();
 }
-function projectHasData(){ return curProj().id==="ndm1" || !!CHART_DATA.live; }
+function projectHasData(){ return hasResults(); }
 function updateProvenance(){
   const d=curData();
   // The sample charts belong to NDM-1. Other projects have no measured
@@ -2342,7 +2271,7 @@ function updateProvenance(){
   }
   // Once a run has happened the displayed data is measured, so the badge must
   // stop calling it sample data.
-  const showingMeasured = state.dataMode==="live" && !!CHART_DATA.live;
+  const showingMeasured = hasResults();
   el.provenance.dataset.kind = state.run.active
     ? (state.run.mode==="live"?"live":"replay")
     : (showingMeasured?"live":"sample");
@@ -2689,7 +2618,7 @@ async function startRun(expId){
   const exp=nodeById(expId); if(!exp) return;
   // reset downstream
   state.run.active=true; state.run.log=[]; state.run.id++;
-  const runId=(curProj().id==="ndm1"?"r-":curProj().id==="materials"?"m-":"s-")+String(state.run.id).padStart(2,"0");
+  const runId="r-"+String(state.run.id).padStart(2,"0");
   const live=await hasBackend();
   state.run.mode=live?"live":"replay";
   updateProvenance();
@@ -2867,8 +2796,7 @@ async function runViaBackend(expId,runId){
   try{
     const ctl=new AbortController(); state.run.abort=ctl;
     const res=await api("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({project:curProj().id,experiment:expId,runId,dataMode:state.dataMode,
-        question:state.question||curProj().question||"",
+      body:JSON.stringify({project:curProj().id,experiment:expId,runId,        question:state.question||curProj().question||"",
         aid:(state.opts&&state.opts.aid)||null}),signal:ctl.signal});
     // Busy is not failure. One run happens at a time because two will not fit
     // in the instance's memory, so wait for the slot instead of giving up --
