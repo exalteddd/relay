@@ -37,7 +37,14 @@ class LLM:
             self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
         elif self.provider == "openai":
             import openai
+            if not cfg.openai_api_key:
+                raise RuntimeError("Set OPENAI_API_KEY (or DATABRICKS_TOKEN for Model Serving).")
             self.client = openai.OpenAI(api_key=cfg.openai_api_key, base_url=cfg.openai_base_url)
+            # Endpoints disagree on these two. Probed on first call, then reused:
+            # current OpenAI reasoning models require max_completion_tokens, while
+            # older models and some compatible gateways only accept max_tokens.
+            self._token_param = "max_completion_tokens"
+            self._json_mode = True
         elif self.provider == "mock":
             self.client = MockLLM()
         else:
@@ -49,19 +56,65 @@ class LLM:
             self.usage["input_tokens"] += inp or 0
             self.usage["output_tokens"] += out or 0
 
-    def text(self, system: str, prompt: str, fast: bool = False, max_tokens: int = 4096) -> str:
+    def text(self, system: str, prompt: str, fast: bool = False, max_tokens: int = 4096,
+             json_mode: bool = False) -> str:
         model = self.cfg.fast_model if fast else self.cfg.model
         if self.provider == "anthropic":
             r = self.client.messages.create(model=model, max_tokens=max_tokens, system=system,
                                             messages=[{"role": "user", "content": prompt}])
             self._track(r.usage.input_tokens, r.usage.output_tokens)
             return "".join(b.text for b in r.content if b.type == "text")
-        r = self.client.chat.completions.create(
-            model=model, max_tokens=max_tokens,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}])
+        r = self._openai_create(model, system, prompt, max_tokens, json_mode)
         if r.usage:
             self._track(r.usage.prompt_tokens, r.usage.completion_tokens)
         return r.choices[0].message.content or ""
+
+    def _openai_create(self, model: str, system: str, prompt: str, max_tokens: int, json_mode: bool):
+        """Call an OpenAI-compatible endpoint, adapting to what it accepts.
+
+        Two parameters vary across endpoints, so each is tried once and the
+        working choice is remembered for the rest of the run:
+
+        - Reasoning models (the gpt-5 family) require `max_completion_tokens`
+          and reject `max_tokens`; older models and gateways like Databricks
+          Model Serving are the other way round.
+        - Native JSON mode removes most malformed-JSON retries, which matters
+          because every stage of the pipeline demands parseable JSON -- but not
+          every compatible endpoint implements it.
+
+        Reasoning models also spend hidden reasoning tokens from the same
+        budget, so the cap is widened to stop a long think truncating the
+        answer to nothing.
+        """
+        import openai
+
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        swapped_token_param = False
+        for _ in range(4):  # at most one fallback per adaptable parameter
+            reasoning = self.cfg.reasoning_effort if self._token_param == "max_completion_tokens" else None
+            # Reasoning tokens come out of the same budget, so leave headroom.
+            budget = max_tokens * 3 if self._token_param == "max_completion_tokens" else max_tokens
+            kwargs = {"model": model, "messages": messages, self._token_param: budget}
+            if json_mode and self._json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            if reasoning:
+                kwargs["reasoning_effort"] = reasoning
+            try:
+                return self.client.chat.completions.create(**kwargs)
+            except openai.BadRequestError as e:
+                msg = str(e).lower()
+                # Endpoints phrase this either way -- naming the parameter they
+                # reject, or the one they want instead. Either means: swap.
+                if not swapped_token_param and ("max_tokens" in msg or "max_completion_tokens" in msg):
+                    self._token_param = ("max_tokens" if self._token_param == "max_completion_tokens"
+                                         else "max_completion_tokens")
+                    swapped_token_param = True
+                elif ("response_format" in msg or "json_object" in msg) and self._json_mode:
+                    self._json_mode = False
+                elif "reasoning_effort" in msg and self.cfg.reasoning_effort:
+                    self.cfg.reasoning_effort = None
+                else:
+                    raise
 
     def json(self, task: str, system: str, prompt: str, fast: bool = False,
              max_tokens: int = 4096, context: dict | None = None):
@@ -71,7 +124,7 @@ class LLM:
         system = system + "\n\nRespond with a single valid JSON object and nothing else."
         last_err = None
         for _ in range(2):
-            raw = self.text(system, prompt, fast=fast, max_tokens=max_tokens)
+            raw = self.text(system, prompt, fast=fast, max_tokens=max_tokens, json_mode=True)
             try:
                 return parse_json(raw)
             except (ValueError, json.JSONDecodeError) as e:

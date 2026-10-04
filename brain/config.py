@@ -30,6 +30,7 @@ class Config:
     openalex_email: str | None
     openalex_api_key: str | None
     s2_api_key: str | None
+    reasoning_effort: str | None = None   # gpt-5 family: minimal | low | medium | high
 
     @property
     def projects_dir(self) -> Path:
@@ -43,9 +44,11 @@ class Config:
 def load_config() -> Config:
     _load_dotenv(Path.cwd() / ".env")
     provider = os.getenv("BRAIN_PROVIDER", "anthropic").lower()
+    # (strong model, fast model). Strong handles planning, synthesis, hypotheses
+    # and critique; fast handles the bulk screening and extraction passes.
     defaults = {
         "anthropic": ("claude-sonnet-4-5", "claude-haiku-4-5"),
-        "openai": ("gpt-4o", "gpt-4o-mini"),
+        "openai": ("gpt-5-mini", "gpt-5-nano"),
         "mock": ("mock", "mock"),
     }
     model, fast = defaults.get(provider, ("", ""))
@@ -62,4 +65,5 @@ def load_config() -> Config:
         openalex_email=os.getenv("OPENALEX_EMAIL"),
         openalex_api_key=os.getenv("OPENALEX_API_KEY"),
         s2_api_key=os.getenv("S2_API_KEY"),
+        reasoning_effort=os.getenv("BRAIN_REASONING_EFFORT") or None,
     )
