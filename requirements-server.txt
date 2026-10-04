@@ -3,5 +3,6 @@
 flask>=3.0
 gunicorn>=21.2
 requests>=2.31
+python-dotenv>=1.0
 rdkit>=2023.9
 scikit-learn>=1.3

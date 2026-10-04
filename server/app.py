@@ -34,6 +34,15 @@ from flask import Flask, Response, abort, jsonify, redirect, request, send_from_
 
 from server.pipeline_runner import DEFAULT_QUESTION, engine_available, run_events
 
+# Load .env for local development. Real environments (Render) set these in the
+# process environment, which already-set values take precedence over.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
+except ImportError:  # optional: production does not need it
+    pass
+
 ROOT = Path(__file__).resolve().parent.parent
 GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
