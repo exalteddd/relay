@@ -528,6 +528,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .cog-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
 button.brand{width:100%;background:transparent;border:0;cursor:pointer;text-align:left}
 button.brand:hover .wordmark{color:var(--accent-strong)}
+.ec-link{margin-top:7px;font-size:12px}
+.ec-link a{color:var(--accent);text-decoration:none;word-break:break-all}
+.ec-link a:hover{text-decoration:underline}
 .form-error{margin-top:4px;font-size:12.5px;color:#c0392b;font-weight:600}
 :root[data-theme="dark"] .form-error{color:#ff8a7a}
 .btn.danger{background:#c0392b;border-color:#c0392b;color:#fff}
@@ -1158,6 +1161,33 @@ function renderCrumb(){
 
 /* ============================ render: graph ============================ */
 let nodeEls={};
+/* A card used to say the same thing three times: a coloured dot, a type tag,
+   and a title that just repeated the type ("QUESTION / Research question").
+   The tag carries the type, so a generic title is dropped and the substance
+   is promoted into its place.
+
+   Summaries are derived, never written by hand. One node claimed "8 sources"
+   while holding a single record — a card must not be able to contradict the
+   data behind it. */
+const GENERIC_TITLE=/^(research\s+)?(question|evidence|sources?|hypothesis|experiment|results?|next experiment|note)s?$/i;
+function nodeSubtitle(n){
+  if(n.type==="source"){
+    const src=(n.meta&&n.meta.sources)||[];
+    if(src.length===1) return src[0].meta ? `${src[0].src} · ${src[0].meta}` : src[0].src;
+    if(src.length>1)   return `${src.length} sources · ${src[0].src} and ${src.length-1} more`;
+  }
+  return n.summary||"";
+}
+function nodeHeading(n){
+  const t=(n.title||"").trim(), sub=nodeSubtitle(n);
+  if(n.type==="source"){
+    const src=(n.meta&&n.meta.sources)||[];
+    if(src.length===1) return {title:src[0].src, sub:src[0].meta||""};
+    if(src.length>1)   return {title:`${src.length} sources`, sub:`${src[0].src} and ${src.length-1} more`};
+  }
+  if(GENERIC_TITLE.test(t) && sub) return {title:sub, sub:""};
+  return {title:t, sub};
+}
 function statusChipHTML(st){const s=STATUS[st]||STATUS.planned;return `<span class="status-chip" data-st="${st}"><span class="glyph">${s.g}</span>${s.l}</span>`;}
 function renderGraph(){
   const p=curProj();
@@ -1171,15 +1201,15 @@ function renderGraph(){
     d.dataset.origin = n.origin==="user" ? "user" : "generated";
     d.style.left=n.x+"px"; d.style.top=n.y+"px";
     d.tabIndex=0; d.setAttribute("role","button");
-    d.setAttribute("aria-label",`${TYPE_LABEL[n.type]}: ${n.title}`);
+    d.setAttribute("aria-label",`${TYPE_LABEL[n.type]}: ${nodeHeading(n).title}`);
     const showPreview = n.type==="result";
     d.innerHTML=`
       <div class="node-head">
         <span class="node-dot"></span>
         <span class="node-type-tag">${esc(TYPE_LABEL[n.type])}</span>
       </div>
-      <div class="node-title">${esc(n.title)}</div>
-      ${n.summary?`<div class="node-sum">${esc(n.summary)}</div>`:""}
+      ${(()=>{const h=nodeHeading(n);return `<div class="node-title">${esc(h.title)}</div>`+
+        (h.sub?`<div class="node-sum">${esc(h.sub)}</div>`:"");})()}
       ${state.editing?`<span class="port" title="Drag onto another node to connect"></span>`:""}
       <div class="node-foot">
         ${statusChipHTML(n.status)}
@@ -1454,8 +1484,10 @@ function toggleMax(){
 function renderPaneHeader(n){
   const dot=$("#paneDot");
   dot.style.background=dotColor(n.type);
+  const h=nodeHeading(n);
   $("#paneType").textContent=TYPE_LABEL[n.type];
-  $("#paneName").textContent=n.title;
+  // Never repeat the type as the name: the label above it already says it.
+  $("#paneName").textContent=h.title;
   const s=STATUS[n.status]||STATUS.planned;
   const chip=$("#paneStatus"); chip.dataset.st=n.status; chip.innerHTML=`<span class="glyph">${s.g}</span>${s.l}`;
 }
@@ -1492,12 +1524,12 @@ function paneQuestion(n){const m=n.meta;return `
   <div class="section"><div class="prose"><p>${esc(m.objective||"")}</p></div></div>
   ${sectionKV("Scope & outcome",{Scope:m.scope,"Measurable outcome":m.outcome,Constraints:m.constraints})}
   ${sectionKV("Data & budget",{Data:m.data,Budget:m.budget})}
-  ${actionRow([{id:"edit",label:"Edit question"},{id:"add-evidence",label:"Add evidence",icon:IC.plus},{id:"propose",label:"Propose hypotheses",primary:true}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"add-evidence",label:"Add evidence",icon:IC.plus},{id:"propose",label:"Add hypothesis",primary:true}])}`;}
 function paneSource(n){const m=n.meta;const cards=(m.sources||[]).map(s=>`
-  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join("");
+  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div>${s.url?`<div class="ec-link"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></div>`:""}</div>`).join("");
   return `<div class="section"><h3>Sources & records</h3>${cards}</div>
   ${sectionKV("Appraisal",{Relevance:m.relevance,Limitations:m.limitations})}
-  ${actionRow([{id:"open-source",label:"Open source",icon:IC.link},{id:"attach",label:"Attach file",icon:IC.plus},{id:"challenge",label:"Link or challenge a claim"}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"open-source",label:"Open source",icon:IC.link},{id:"link-claim",label:"Connect to a claim"}])}`;}
 function paneHypothesis(n){const m=n.meta;
   const preds=(m.predictions||[]).map(p=>`<li>${esc(p)}</li>`).join("");
   const sup=(m.supports||[]).map(p=>`<li class="pos">${esc(p)}</li>`).join("");
@@ -1507,20 +1539,20 @@ function paneHypothesis(n){const m=n.meta;
   ${sup?`<div class="section"><h3>Supporting evidence</h3><ul class="bullets">${sup}</ul></div>`:""}
   ${con?`<div class="section"><h3>Contradictory evidence</h3><ul class="bullets">${con}</ul></div>`:""}
   ${sectionKV("Appraisal",{Uncertainty:m.uncertainty,"Alternative":m.alt})}
-  ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"compare-alt",label:"Compare alternatives",icon:IC.compare},{id:"revise",label:"Revise (new version)"}])}`;}
+  ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"link-claim",label:"Connect to a claim"},{id:"edit",label:"Edit"}])}`;}
 function paneExperiment(n){const m=n.meta;
   const tests=(m.tests||[]).map(t=>`<div class="evidence-card" style="${t.sel?"border-color:var(--accent);background:var(--accent-soft)":""}"><div class="ec-top"><span class="ec-src">${esc(t.name)}</span>${t.sel?`<span class="rel-tag supports">selected</span>`:""}</div><div class="ec-body">${esc(t.why)}</div></div>`).join("");
   return `<div class="section"><h3>Proposed tests</h3>${tests}</div>
   ${sectionKV("Method & inputs",{Method:m.method,Inputs:m.inputs,Baseline:m.baseline,Controls:m.controls,Parameters:m.params})}
   ${sectionKV("Cost & approval",{"Expected cost":m.cost,Approval:m.approval})}
   <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Runs act on real inputs and need approval. In a shared demo this replays a labelled trace; served from your Mac it orchestrates Omnigent.</span></div>
-  ${actionRow([{id:"compare-tests",label:"Compare tests",icon:IC.compare},{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"}])}`;}
+  ${actionRow([{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"},{id:"edit",label:"Edit"}])}`;}
 function paneNext(n){const m=n.meta;
   const tests=(m.tests||[]).map(t=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(t.name)}</span><span class="ec-meta">${esc(t.cost||"")}</span></div><div class="ec-body">${esc(t.why)}</div><div class="pane-actions" style="margin-top:9px"><button class="chip-action" data-paneact="pick-next" data-test="${esc(t.name)}">Select this test</button></div></div>`).join("");
   return `${sectionKV("After the result",{"What changed":m.changed,"Remaining uncertainty":m.uncertainty})}
   <div class="section"><h3>Candidate next tests</h3>${tests}</div>
-  ${actionRow([{id:"branch",label:"Branch investigation",icon:IC.compare},{id:"record",label:"Record decision"}])}`;}
-function paneNote(n){return `<div class="section"><div class="prose"><p>${esc(n.meta.text||n.summary||"")}</p></div></div>${actionRow([{id:"edit",label:"Edit note"},{id:"link",label:"Link to a node",icon:IC.link}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"link-claim",label:"Connect to a claim"}])}`;}
+function paneNote(n){return `<div class="section"><div class="prose"><p>${esc(n.meta.text||n.summary||"")}</p></div></div>${actionRow([{id:"edit",label:"Edit"},{id:"link-claim",label:"Connect to a claim",icon:IC.link}])}`;}
 
 /* result pane with tabs */
 function paneResult(n){
@@ -1555,7 +1587,7 @@ function paneResult(n){
   ${inner}
   ${tab==="plot"?`<div class="section" style="margin-top:22px"><h3>Interpretation</h3><div class="prose"><p>${esc(n.meta.interp||"")}</p></div></div>
   ${sectionKV("Provenance",{"Run ID":prov.run,"Data version":prov.data,"Code revision":prov.code,Parameters:prov.params,Approvals:prov.approvals})}
-  ${actionRow([{id:"compare-runs",label:"Compare runs",icon:IC.compare},{id:"export",label:"Export",icon:IC.down},{id:"add-canvas",label:"Add chart to canvas",icon:IC.chart,primary:true}])}`:""}`;
+  ${actionRow([{id:"export",label:"Download CSV",icon:IC.down},{id:"add-canvas",label:"Add chart to canvas",icon:IC.chart,primary:true}])}`:""}`;
 }
 function activityHTML(){
   if(!state.run.log.length) return `<div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span>No run yet. Press <b>Run</b> to orchestrate the agents — events appear here as they fire.</span></div>`;
@@ -1650,16 +1682,60 @@ function wirePaneActions(n){
 function paneAction(act,n,btn){
   switch(act){
     case "run-exp": openRunModal(n.id); break;
-    case "design-test": toast("Drafted a test from this hypothesis"); break;
-    case "add-canvas": togglePreview(curProj().resultNode||n.id,true); toast("Chart preview added to canvas"); break;
-    case "export": toast("Exported results.csv (sample)"); break;
-    case "compare-runs": toast("Opened run comparison (r-02 vs r-03)"); break;
-    case "add-evidence": openNodeForm("source"); break;
-    case "propose": openNodeForm("hypothesis"); break;
-    case "pick-next": toast("Selected next test: "+(btn.dataset.test||"")); break;
     case "activity": n._tab="activity"; renderPaneBody(n); break;
+    case "add-canvas": togglePreview(curProj().resultNode||n.id,true); toast("Chart preview added to canvas"); break;
+
+    // Editing and structure: these all have real machinery behind them.
+    case "edit": openNodeForm(n.type,null,n.id); break;
+    case "add-evidence": openNodeForm("source",null,null,n.id); break;
+    case "propose": openNodeForm("hypothesis",null,null,n.id); break;
+    case "design-test": openNodeForm("experiment",null,null,n.id); break;
+    case "link-claim": linkFromNode(n); break;
+    case "pick-next": openNodeForm("experiment",{title:btn.dataset.test||""},null,n.id); break;
+
+    // A source is only openable when it has somewhere to go.
+    case "open-source": {
+      const url=((n.meta.sources||[])[0]||{}).url;
+      if(url) window.open(url,"_blank","noopener");
+      else toast("No link on this source — add one with Edit");
+      break;
+    }
+    case "export": exportResult(n); break;
     default: toast("Noted");
   }
+}
+
+/* "Link or challenge a claim" means: connect this to something, and say how.
+   The graph already supports exactly that, so offer it directly. */
+function linkFromNode(n){
+  const others=curProj().nodes.filter(x=>x.id!==n.id&&!wouldCycle(n.id,x.id)
+    && !curProj().edges.some(e=>e.from===n.id&&e.to===x.id));
+  if(!others.length){ toast("Nothing left to connect this to"); return; }
+  openMenu(nodeEls[n.id]||el.canvas,`
+    <div class="m-head">Connect to…</div>
+    ${others.slice(0,12).map(x=>`<button class="mi" data-link="${x.id}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(x.type)}"></span><span>${esc(nodeHeading(x).title)}</span></button>`).join("")}
+  `,m=>{
+    $$("[data-link]",m).forEach(b=>b.addEventListener("click",()=>{
+      const to=nodeById(b.dataset.link); closeMenus();
+      curProj().edges.push({from:n.id,to:to.id,rel:inferRel(n,to)});
+      relayout(); savePersist(); toast(`Connected to ${nodeHeading(to).title}`);
+    }));
+  });
+}
+
+/* Download what the result actually holds, rather than claiming to export. */
+function exportResult(n){
+  const d=curData();
+  const rows=[["rank","candidate","score","uncertainty","family"]];
+  ((d.candidates&&d.candidates.rows)||[]).forEach((r,i)=>rows.push([i+1,r.id,r.score,r.err==null?"":r.err,r.family||""]));
+  rows.push([]); rows.push(["top fraction screened (%)","enrichment (x)","baseline (x)"]);
+  const e=d.enrichment||{};
+  (e.x||[]).forEach((x,i)=>rows.push([x,(e.proposed||[])[i],(e.baseline||[])[i]]));
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
+  a.download=`${curProj().id}-results.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Downloaded CSV");
 }
 
 /* =========================== inline previews ========================== */
@@ -1842,6 +1918,7 @@ const NODE_FORM={
     {k:"title",     l:"Source",                  req:true,  ph:"Metallo-β-lactamase inhibitor review"},
     {k:"body",      l:"What does it show?",      req:true,  area:true, ph:"Thiol-carboxylate chemotypes recur as validated binders."},
     {k:"rel",       l:"Relation",                opts:["supports","contradicts"]},
+    {k:"url",       l:"Link (optional)",         ph:"https://doi.org/..."},
     {k:"relevance", l:"Why it matters here",     ph:"Grounds the chelation prior"}]},
   hypothesis:{label:"Hypothesis", rel:"supports", fields:[
     {k:"title",     l:"Short name",              req:true,  ph:"Chelating warheads inhibit the active site"},
@@ -1867,7 +1944,7 @@ const NODE_FORM={
 /* Turn form values into the meta shape each pane renderer reads. */
 function metaFor(type,v){
   if(type==="question")   return {objective:v.objective,outcome:v.outcome,data:v.data};
-  if(type==="source")     return {sources:[{src:v.title,meta:"added by you",rel:v.rel||"supports",body:v.body}],relevance:v.relevance};
+  if(type==="source")     return {sources:[{src:v.title,meta:"added by you",rel:v.rel||"supports",body:v.body,url:v.url||""}],relevance:v.relevance};
   if(type==="hypothesis") return {statement:v.statement,predictions:v.prediction?[v.prediction]:[],uncertainty:v.uncertainty};
   if(type==="experiment") return {tests:[{name:v.title,sel:true,why:v.method}],method:v.method,inputs:v.inputs,controls:v.controls,approval:"Required before run."};
   if(type==="result")     return {interp:v.interp};
@@ -1880,7 +1957,7 @@ function metaFor(type,v){
 function valuesFor(n){
   const m=n.meta||{}, t=n.type;
   if(t==="question")   return {title:n.title,objective:m.objective,outcome:m.outcome,data:m.data};
-  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,rel:s0.rel,relevance:m.relevance};}
+  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,rel:s0.rel,url:s0.url,relevance:m.relevance};}
   if(t==="hypothesis") return {title:n.title,statement:m.statement,prediction:(m.predictions||[])[0],uncertainty:m.uncertainty};
   if(t==="experiment") return {title:n.title,method:m.method,inputs:m.inputs,controls:m.controls};
   if(t==="result")     return {title:n.title,interp:m.interp};
