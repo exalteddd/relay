@@ -223,6 +223,26 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .node:hover{box-shadow:var(--shadow-md);border-color:var(--accent-ring)}
 .node.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
 .node.pulse{animation:nodepulse 1.1s ease}
+/* Editing affordances appear only in edit mode, so the locked view stays calm. */
+.editing .node{cursor:grab}
+.editing .node.dragging{cursor:grabbing;box-shadow:var(--shadow-lg);z-index:20}
+.editing .node .node-head{cursor:inherit}
+.port{
+  position:absolute;right:-7px;top:50%;margin-top:-7px;width:14px;height:14px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.18);
+  opacity:0;transform:scale(.6);transition:opacity .14s,transform .14s;cursor:crosshair;z-index:6;
+}
+.editing .node:hover .port,.editing .node.selected .port{opacity:1;transform:scale(1)}
+.port:hover{background:var(--accent)}
+.node.link-target{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-ring),var(--shadow-md)}
+.edge-ghost{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;opacity:.9}
+.pill-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill-btn.on:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+/* A quiet band so the mode is obvious without a banner. */
+.editing #canvas::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  box-shadow:inset 0 0 0 2px var(--accent-ring);border-radius:inherit;
+}
 /* Nodes the run produced read as the record: solid, filled. Nodes the user
    added are visibly their own: dashed edge, tinted, with a corner marker. */
 .node[data-origin="user"]{
@@ -317,7 +337,12 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .pill-btn:hover{background:var(--surface-2);color:var(--ink)}
 .pill-btn svg{width:15px;height:15px}
 
-.cmdbar{left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,calc(100% - 180px));z-index:28}
+/* The bottom row holds three overlays. Their widths change (Tidy was added,
+   the minimap hides when the canvas is narrow), so the command bar is inset
+   by whatever the other two actually measure rather than a guessed gap. */
+.cmdbar{left:calc(var(--bl,300px) + 20px);right:calc(var(--br,204px) + 20px);
+  bottom:18px;transform:none;width:auto;max-width:560px;margin-inline:auto;z-index:28}
+.minimap[hidden]{display:none}
 .cmd-ctx{display:flex;gap:6px;margin:0 0 7px 4px;flex-wrap:wrap}
 .ctx-chip{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 9px;box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:6px}
 .ctx-chip .x{color:var(--ink-3);font-weight:700}
@@ -476,6 +501,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 }
 .node-form textarea{resize:vertical;line-height:1.5}
 .node-form .req{font-size:9.5px;color:var(--accent);letter-spacing:.04em;margin-left:5px}
+.menu .mi.danger{color:#c0392b}
+.menu .mi.danger:hover{background:rgba(192,57,43,.1)}
+:root[data-theme="dark"] .menu .mi.danger{color:#ff8a7a}
 .form-error{margin-top:4px;font-size:12.5px;color:#c0392b;font-weight:600}
 :root[data-theme="dark"] .form-error{color:#ff8a7a}
 .btn.danger{background:#c0392b;border-color:#c0392b;color:#fff}
@@ -660,6 +688,10 @@ button{font-family:inherit;color:inherit;cursor:pointer}
           <button class="pill-btn" id="fitBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>
             Fit
+          </button>
+          <button class="pill-btn" id="editBtn" title="Edit the diagram (E)" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17v2h2l9-9-2-2-9 9zM15 6l3 3M12 20h8"/></svg>
+            <span id="editBtnLabel">Edit</span>
           </button>
           <button class="pill-btn" id="tidyBtn" title="Arrange the graph left to right (T)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6M3 12h6M3 18h6M15 4h6M15 12h6M15 20h6M9 6l6-2M9 12h6M9 18l6 2"/></svg>
@@ -920,7 +952,8 @@ let state={
   projects:{},           // runtime clones
   view:{},               // {pid:{tx,ty,scale}}
   previews:{},           // {pid:{nid:{open,x,y,w,h,tab}}}
-  run:{active:false,log:[],mode:null,id:3,timers:[],abort:null}
+  run:{active:false,log:[],mode:null,id:3,timers:[],abort:null},
+  editing:false        // locked by default: structure is read-only and auto-spaced
 };
 function curProj(){return state.projects[state.project];}
 function nodeById(id){return curProj().nodes.find(n=>n.id===id);}
@@ -938,6 +971,7 @@ function loadPersist(){
     // "live" belongs to a run that is over; a reload has no measured data to show.
     if(p.dataMode) state.dataMode = (p.dataMode==="live"&&!CHART_DATA.live) ? "verified" : p.dataMode;
     if(p.theme) state.theme=p.theme;
+    if(typeof p.editing==="boolean") state.editing=p.editing;
     if(p.project && state.projects[p.project]) state.project=p.project;
     if(p.view) state.view=p.view;
     if(p.previews) state.previews=p.previews;
@@ -970,7 +1004,7 @@ function savePersist(){
         }
       }
       localStorage.setItem(LSK,JSON.stringify({
-        dataMode:state.dataMode,theme:state.theme,project:state.project,
+        dataMode:state.dataMode,theme:state.theme,project:state.project,editing:state.editing,
         view:state.view,previews:state.previews,pos,extraNodes,extraEdges
       }));
     }catch(e){/* storage may be unavailable; ignore */}
@@ -1090,6 +1124,7 @@ function renderGraph(){
       </div>
       <div class="node-title">${esc(n.title)}</div>
       ${n.summary?`<div class="node-sum">${esc(n.summary)}</div>`:""}
+      ${state.editing?`<span class="port" title="Drag onto another node to connect"></span>`:""}
       <div class="node-foot">
         ${statusChipHTML(n.status)}
         ${showPreview?`<button class="link-btn" data-act="preview">Preview</button>`:""}
@@ -1137,26 +1172,76 @@ function renderEdges(){
   $$(".edge-g",el.edges).forEach(grp=>{
     grp.querySelector(".edge-hit").addEventListener("mouseenter",()=>grp.classList.add("show"));
     grp.querySelector(".edge-hit").addEventListener("mouseleave",()=>{ const sel=state.selection; const act=sel&&(grp.dataset.from===sel||grp.dataset.to===sel); if(!act)grp.classList.remove("show"); });
+    grp.addEventListener("contextmenu",ev=>{
+      const e=curProj().edges.find(x=>x.from===grp.dataset.from&&x.to===grp.dataset.to);
+      if(e) edgeContextMenu(ev,e);
+    });
   });
   scheduleMinimap();
 }
 
 /* ======================== node interactions =========================== */
-/* Nodes are not draggable. Position is derived from the graph's structure by
-   layoutGraph(), so there is one canonical arrangement rather than a layout
-   per person that degrades as a run adds nodes. Clicking, keyboard focus and
-   the inline preview all still work. */
+/* Two modes, because the two jobs want opposite things.
+   Locked (the default) is for reading and running: positions are derived by
+   layoutGraph, nothing moves, nothing can be rewired by accident.
+   Editing is for arranging: nodes drag, and a port on each node's right edge
+   lets you connect it somewhere else. Locking keeps whatever you arranged
+   rather than snapping it back. */
+function setEditing(on){
+  state.editing=!!on;
+  el.app.classList.toggle("editing",state.editing);
+  const b=$("#editBtn"); b.setAttribute("aria-pressed",String(state.editing));
+  b.classList.toggle("on",state.editing);
+  $("#editBtnLabel").textContent=state.editing?"Lock":"Edit";
+  b.title=state.editing?"Lock the diagram (E)":"Edit the diagram (E)";
+  renderGraph(); savePersist();
+  toast(state.editing
+    ? "Editing — drag nodes, or drag a node's right edge onto another to connect them"
+    : "Locked — the diagram is fixed");
+}
+
 function wireNode(d,n){
+  let start=null,dragging=false;
   d.addEventListener("pointerdown",ev=>{
     if(ev.button!==0) return;
     const onLink=ev.target.closest("[data-act]");
     if(onLink){ ev.stopPropagation(); if(onLink.dataset.act==="preview"){ togglePreview(n.id,true); } return; }
+    if(ev.target.closest(".port")){ beginLink(ev,n); return; }
     ev.stopPropagation();          // don't start a canvas pan from the node
-    selectNode(n.id);
+    if(state.editing){
+      start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false;
+      d.setPointerCapture(ev.pointerId);
+    } else {
+      selectNode(n.id);
+    }
   });
+  d.addEventListener("pointermove",ev=>{
+    if(!start) return;
+    const dx=ev.clientX-start.x, dy=ev.clientY-start.y;
+    if(!dragging && Math.hypot(dx,dy)>4){ dragging=true; d.classList.add("dragging"); }
+    if(dragging){
+      const v=view();
+      n.x=Math.round(start.nx+dx/v.scale); n.y=Math.round(start.ny+dy/v.scale);
+      d.style.left=n.x+"px"; d.style.top=n.y+"px";
+      renderEdges();
+    }
+  });
+  d.addEventListener("pointerup",ev=>{
+    if(!start) return;
+    try{d.releasePointerCapture(ev.pointerId);}catch(e){}
+    if(dragging){ d.classList.remove("dragging"); savePersist(); }
+    else selectNode(n.id);
+    start=null; dragging=false;
+  });
+  d.addEventListener("contextmenu",ev=>nodeContextMenu(ev,n));
   d.addEventListener("keydown",ev=>{
     if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); selectNode(n.id); }
     else if(ev.key==="Delete"||ev.key==="Backspace"){ ev.preventDefault(); deleteNode(n.id); }
+    // Keyboard equivalent of the context menu.
+    else if(ev.key==="ContextMenu"||(ev.shiftKey&&ev.key==="F10")){
+      const r=d.getBoundingClientRect();
+      nodeContextMenu(Object.assign(ev,{clientX:r.left+24,clientY:r.top+24}),n);
+    }
   });
 }
 
@@ -1196,8 +1281,22 @@ $("#zoomIn").addEventListener("click",()=>zoomBy(1.18));
 $("#zoomOut").addEventListener("click",()=>zoomBy(1/1.18));
 $("#fitBtn").addEventListener("click",()=>fit(true));
 $("#tidyBtn").addEventListener("click",()=>tidy());
+$("#editBtn").addEventListener("click",()=>setEditing(!state.editing));
+el.canvas.addEventListener("contextmenu",canvasContextMenu);
 
 /* ============================== minimap =============================== */
+/* Keep the bottom overlays from colliding. The minimap is the first thing to
+   go when the canvas gets narrow, because the command bar has to stay usable. */
+function layoutOverlays(){
+  const z=document.querySelector(".zoomctl"), mm=document.querySelector(".minimap");
+  const w=el.canvas.clientWidth;
+  if(mm) mm.hidden = w < 880;
+  el.canvas.style.setProperty("--bl",(z?z.offsetWidth:0)+"px");
+  el.canvas.style.setProperty("--br",(mm&&!mm.hidden?mm.offsetWidth:0)+"px");
+}
+addEventListener("resize",layoutOverlays);
+new ResizeObserver(layoutOverlays).observe(el.canvas);
+
 let mmT=null; function scheduleMinimap(){ if(mmT)cancelAnimationFrame(mmT); mmT=requestAnimationFrame(renderMinimap); }
 function renderMinimap(){
   const b=graphBBox(); const pad=40;
@@ -1724,26 +1823,42 @@ function metaFor(type,v){
   return {text:v.title};
 }
 
-function openNodeForm(type,prefill){
+/* Read a node back into the shape the form uses, so editing shows what is
+   already there instead of a blank form. */
+function valuesFor(n){
+  const m=n.meta||{}, t=n.type;
+  if(t==="question")   return {title:n.title,objective:m.objective,outcome:m.outcome,data:m.data};
+  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,rel:s0.rel,relevance:m.relevance};}
+  if(t==="hypothesis") return {title:n.title,statement:m.statement,prediction:(m.predictions||[])[0],uncertainty:m.uncertainty};
+  if(t==="experiment") return {title:n.title,method:m.method,inputs:m.inputs,controls:m.controls};
+  if(t==="result")     return {title:n.title,interp:m.interp};
+  if(t==="next")       return {title:n.title,changed:m.changed,uncertainty:m.uncertainty};
+  return {title:m.text||n.title};
+}
+
+function openNodeForm(type,prefill,editingId){
   const spec=NODE_FORM[type]; if(!spec) return;
+  const editing=editingId?nodeById(editingId):null;
+  if(editing) prefill=valuesFor(editing);
   const parent=state.selection?nodeById(state.selection):null;
   const rows=spec.fields.map(f=>{
     const val=esc((prefill&&prefill[f.k])||"");
     const input=f.opts
-      ? `<select data-f="${f.k}">${f.opts.map(o=>`<option value="${o}">${o}</option>`).join("")}</select>`
+      ? `<select data-f="${f.k}">${f.opts.map(o=>`<option value="${o}"${((prefill&&prefill[f.k])===o)?" selected":""}>${o}</option>`).join("")}</select>`
       : f.area
         ? `<textarea data-f="${f.k}" rows="3" placeholder="${esc(f.ph||"")}">${val}</textarea>`
         : `<input data-f="${f.k}" value="${val}" placeholder="${esc(f.ph||"")}">`;
     return `<div class="field"><label class="flab">${esc(f.l)}${f.req?' <span class="req">required</span>':""}</label>${input}</div>`;
   }).join("");
   modal(`
-    <div class="modal-head"><div><h2>Add ${esc(spec.label.toLowerCase())}</h2>
-      <p>${parent?`Will be linked from <b>${esc(parent.title)}</b> as “${esc(spec.rel)}”.`:"Not linked to anything yet — select a node first to connect it."}</p></div>
+    <div class="modal-head"><div><h2>${editing?"Edit":"Add"} ${esc(spec.label.toLowerCase())}</h2>
+      <p>${editing?"Changes replace what is on the card and in the detail pane."
+            :(parent?`Will be linked from <b>${esc(parent.title)}</b> as “${esc(spec.rel)}”.`:"Not linked to anything yet — select a node first to connect it.")}</p></div>
       <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="modal-body"><div class="node-form">${rows}</div>
       <div class="form-error" id="formErr" hidden></div></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button>
-      <button class="btn primary" id="nodeGo">Add ${esc(spec.label.toLowerCase())}</button></div>
+      <button class="btn primary" id="nodeGo">${editing?"Save changes":"Add "+esc(spec.label.toLowerCase())}</button></div>
   `,root=>{
     const first=root.querySelector("[data-f]"); if(first) first.focus();
     const submit=()=>{
@@ -1754,7 +1869,7 @@ function openNodeForm(type,prefill){
         e.textContent=(missing.length===1?"Still needed: ":"Still needed: ")+missing.join(", ");
         e.hidden=false; return;
       }
-      closeModal(); createNode(type,v);
+      closeModal(); editing ? applyNodeEdit(editing,v) : createNode(type,v);
     };
     root.querySelector("#nodeGo").addEventListener("click",submit);
     root.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) submit(); });
@@ -1776,6 +1891,146 @@ function createNode(type,v){
   selectNode(id); savePersist();
   toast(`${spec.label} added`);
   return n;
+}
+
+/* Edits replace only the fields the form owns, so anything else a run
+   attached to the node (provenance, chart payloads) is left alone. */
+function applyNodeEdit(n,v){
+  const summary={question:v.objective,source:v.body,hypothesis:v.statement,
+                 experiment:v.method,result:v.interp,next:v.changed,note:""}[n.type]||"";
+  n.title=v.title.length>46?v.title.slice(0,44)+"…":v.title;
+  n.summary=summary.length>90?summary.slice(0,88)+"…":summary;
+  n.meta=Object.assign({},n.meta,metaFor(n.type,v));
+  n.edited=true;
+  renderGraph(); selectNode(n.id); savePersist();
+  toast("Changes saved");
+}
+
+/* Which relation a new connection gets, inferred from what is being joined so
+   the common case needs no extra click. Change it from the edge's menu. */
+function inferRel(from,to){
+  if(to.type==="hypothesis") return from.type==="source"?"supports":"uses";
+  if(to.type==="experiment") return "tests";
+  if(to.type==="result")     return "produced";
+  return "uses";
+}
+
+/* Drag from a node's port onto another node to connect them. */
+function beginLink(ev,from){
+  ev.preventDefault(); ev.stopPropagation();
+  const ghost=document.createElementNS("http://www.w3.org/2000/svg","path");
+  ghost.setAttribute("class","edge-ghost");
+  el.edges.appendChild(ghost);
+  const vb=el.edges.getBoundingClientRect(), v=view();
+  const toWorld=(cx,cy)=>({x:(cx-vb.left)/v.scale+parseFloat(el.edges.style.left||0),
+                           y:(cy-vb.top)/v.scale+parseFloat(el.edges.style.top||0)});
+  const a=nodeBox(from), x1=a.x+a.w, y1=a.y+a.h/2;
+  let hovered=null;
+  const move=e=>{
+    const p=toWorld(e.clientX,e.clientY);
+    ghost.setAttribute("d",`M${x1},${y1} C${x1+60},${y1} ${p.x-60},${p.y} ${p.x},${p.y}`);
+    const over=document.elementFromPoint(e.clientX,e.clientY)?.closest(".node");
+    const id=over?.dataset.id;
+    if(id!==hovered){
+      if(hovered&&nodeEls[hovered]) nodeEls[hovered].classList.remove("link-target");
+      hovered=(id&&id!==from.id)?id:null;
+      if(hovered) nodeEls[hovered].classList.add("link-target");
+    }
+  };
+  const up=()=>{
+    removeEventListener("pointermove",move); removeEventListener("pointerup",up);
+    ghost.remove();
+    if(hovered&&nodeEls[hovered]) nodeEls[hovered].classList.remove("link-target");
+    if(!hovered) return;
+    const to=nodeById(hovered); const p=curProj();
+    if(p.edges.some(e=>e.from===from.id&&e.to===hovered)){ toast("Already connected"); return; }
+    if(wouldCycle(from.id,hovered)){ toast("That would make a loop"); return; }
+    p.edges.push({from:from.id,to:hovered,rel:inferRel(from,to)});
+    renderGraph(); savePersist();
+    toast(`${from.title} → ${to.title}`);
+  };
+  addEventListener("pointermove",move); addEventListener("pointerup",up);
+}
+
+/* The layout reads left to right, so a connection that closes a loop has no
+   sensible place to sit. Refuse it rather than draw something misleading. */
+function wouldCycle(fromId,toId){
+  const p=curProj(); const seen=new Set(); const stack=[toId];
+  while(stack.length){
+    const cur=stack.pop();
+    if(cur===fromId) return true;
+    if(seen.has(cur)) continue; seen.add(cur);
+    for(const e of p.edges) if(e.from===cur) stack.push(e.to);
+  }
+  return false;
+}
+
+/* Right-click an edge: change what it means, or detach it. */
+function edgeContextMenu(ev,edge){
+  ev.preventDefault(); ev.stopPropagation();
+  const a=nodeById(edge.from), b=nodeById(edge.to);
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(a?a.title:"?")} → ${esc(b?b.title:"?")}</div>
+    ${Object.keys(REL_LABEL).map(r=>`<button class="mi" data-rel="${r}"${r===edge.rel?' aria-current="true"':""}><span>${esc(REL_LABEL[r])}</span></button>`).join("")}
+    <div class="m-sep"></div>
+    <button class="mi danger" data-edge="del"><span>Remove connection</span></button>
+  `,m=>{
+    $$("[data-rel]",m).forEach(btn=>btn.addEventListener("click",()=>{
+      edge.rel=btn.dataset.rel; closeMenus(); renderEdges(); savePersist(); toast("Relation updated");
+    }));
+    $$("[data-edge]",m).forEach(btn=>btn.addEventListener("click",()=>{
+      const p=curProj(); p.edges=p.edges.filter(e=>e!==edge);
+      closeMenus(); renderGraph(); savePersist(); toast("Connection removed");
+    }));
+  });
+}
+
+/* Right-click on a node. Same actions as the pane, where the hand expects
+   them. The destructive one is last and marked. */
+function nodeContextMenu(ev,n){
+  ev.preventDefault(); ev.stopPropagation();
+  selectNode(n.id);
+  const kids=Object.entries(NODE_FORM).map(([t,s])=>
+    `<button class="mi" data-conn="${t}"><span>${esc(s.label)}</span></button>`).join("");
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(TYPE_LABEL[n.type])}</div>
+    <button class="mi" data-cm="inspect"><span>Inspect</span></button>
+    <button class="mi" data-cm="edit"><span>Edit details…</span></button>
+    ${n.type==="result"?`<button class="mi" data-cm="preview"><span>Toggle preview</span></button>`:""}
+    <div class="m-sep"></div>
+    <div class="m-head">Connect a new node</div>
+    ${kids}
+    <div class="m-sep"></div>
+    <button class="mi danger" data-cm="delete"><span>Delete node</span></button>
+  `,m=>{
+    $$("[data-cm]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.cm; closeMenus();
+      if(a==="inspect") selectNode(n.id);
+      else if(a==="edit") openNodeForm(n.type,null,n.id);
+      else if(a==="preview") togglePreview(n.id);
+      else if(a==="delete") deleteNode(n.id);
+    }));
+    $$("[data-conn]",m).forEach(b=>b.addEventListener("click",()=>{
+      closeMenus(); selectNode(n.id); openNodeForm(b.dataset.conn);
+    }));
+  });
+}
+
+/* Right-click on empty canvas: add something, or re-space the graph. */
+function canvasContextMenu(ev){
+  if(ev.target.closest(".node")||ev.target.closest(".preview")||ev.target.closest(".overlay")) return;
+  ev.preventDefault();
+  const kids=Object.entries(NODE_FORM).map(([t,s])=>
+    `<button class="mi" data-add2="${t}"><span>${esc(s.label)}</span></button>`).join("");
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">Add node</div>${kids}
+    <div class="m-sep"></div>
+    <button class="mi" data-cv="tidy"><span>Tidy layout</span></button>
+    <button class="mi" data-cv="fit"><span>Fit to screen</span></button>
+  `,m=>{
+    $$("[data-add2]",m).forEach(b=>b.addEventListener("click",()=>{ closeMenus(); openNodeForm(b.dataset.add2); }));
+    $$("[data-cv]",m).forEach(b=>b.addEventListener("click",()=>{ const a=b.dataset.cv; closeMenus(); a==="tidy"?tidy():fit(true); }));
+  });
 }
 
 function deleteNode(id){
@@ -1807,6 +2062,19 @@ function relayout(){ layoutGraph(curProj()); renderGraph(); requestAnimationFram
 /* =============================== menus =============================== */
 function closeMenus(){ $$(".menu").forEach(m=>m.remove()); document.removeEventListener("pointerdown",menuOutside,true); }
 function menuOutside(e){ if(!e.target.closest(".menu")&&!e.target.closest("[aria-haspopup]")) closeMenus(); }
+/* Same menu, placed at a point instead of under an element — for right-click. */
+function openMenuAt(x,y,html,onwire){
+  closeMenus();
+  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html;
+  document.body.appendChild(m);
+  let left=x, top=y;
+  if(left+m.offsetWidth>innerWidth-10) left=x-m.offsetWidth;
+  if(top+m.offsetHeight>innerHeight-10) top=y-m.offsetHeight;
+  m.style.left=Math.max(10,left)+"px"; m.style.top=Math.max(10,top)+"px";
+  if(onwire)onwire(m);
+  setTimeout(()=>document.addEventListener("pointerdown",menuOutside,true),0);
+  return m;
+}
 function openMenu(anchor,html,onwire){
   closeMenus();
   const m=document.createElement("div"); m.className="menu"; m.innerHTML=html;
@@ -2123,6 +2391,7 @@ document.addEventListener("keydown",e=>{
   }
   if((e.key==="f"||e.key==="F")&&!e.target.matches("input,textarea")){ fit(true); }
   if((e.key==="t"||e.key==="T")&&!e.target.matches("input,textarea")){ tidy(); }
+  if((e.key==="e"||e.key==="E")&&!e.target.matches("input,textarea")){ setEditing(!state.editing); }
   if((e.key==="Delete"||e.key==="Backspace")&&state.selection&&!e.target.matches("input,textarea")
      && !el.modalRoot.classList.contains("open")){ e.preventDefault(); deleteNode(state.selection); }
 });

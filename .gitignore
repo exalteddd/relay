@@ -23,3 +23,7 @@ relay_data/trace.json
 # Server runtime
 medlab/relay_data/events.jsonl
 medlab/relay_data/ranked.json
+
+# Ignore all local environment variants, keeping the example template.
+.env.*
+!.env.example

@@ -141,7 +141,7 @@ class Handler(BaseHTTPRequestHandler):
     def _serve_static(self):
         rel = self.path.split("?")[0].lstrip("/") or "index.html"
         path = os.path.normpath(os.path.join(ROOT, rel))
-        if not path.startswith(ROOT) or not os.path.isfile(path):
+        if rel not in {"index.html", "assets/relay-mark.svg"} or not os.path.realpath(path).startswith(ROOT + os.sep) or not os.path.isfile(path):
             self.send_response(404)
             self.end_headers()
             self.wfile.write(b"Not found")
@@ -165,6 +165,6 @@ if __name__ == "__main__":
     mode = "medlab pipeline" if have_pipeline() else "demo stream"
     print("Relay running on http://localhost:%d  (run source: %s)" % (PORT, mode))
     try:
-        ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+        ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
     except KeyboardInterrupt:
         print("\nstopped")

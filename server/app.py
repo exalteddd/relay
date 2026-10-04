@@ -1,7 +1,7 @@
 """Relay backend: GitHub sign-in, and real runs streamed to the UI.
 
 Viewing the interface is open to anyone. *Starting a run* costs compute, so it
-requires a signed-in GitHub user (optionally one named in RELAY_ALLOWED_USERS).
+requires a signed-in GitHub user named in RELAY_ALLOWED_USERS in production.
 
 Secrets
 -------
@@ -10,7 +10,7 @@ Every secret is read from the environment and never leaves this process:
     SESSION_SECRET        signs the session cookie        (required)
     GITHUB_CLIENT_ID      OAuth app id                    (required for login)
     GITHUB_CLIENT_SECRET  OAuth app secret                (required for login)
-    RELAY_ALLOWED_USERS   optional comma-separated GitHub logins; empty = any
+    RELAY_ALLOWED_USERS   comma-separated GitHub logins; required for production runs
     ANTHROPIC_API_KEY     reserved for the Omnigent route (not used yet)
 
 The browser is never sent any of these. The GitHub access token is exchanged
@@ -69,6 +69,7 @@ ALLOWED = {u.strip().lower() for u in os.environ.get("RELAY_ALLOWED_USERS", "").
 AUTH_CONFIGURED = bool(CLIENT_ID and CLIENT_SECRET)
 
 app.config.update(
+    MAX_CONTENT_LENGTH=16 * 1024,
     SESSION_COOKIE_HTTPONLY=True,    # JS cannot read it, so XSS cannot steal it
     SESSION_COOKIE_SAMESITE="Lax",   # survives the OAuth redirect, blocks cross-site POSTs
     SESSION_COOKIE_SECURE=not IS_DEV,  # HTTPS-only off localhost
@@ -81,6 +82,27 @@ app.config.update(
 # doubles as a cap on concurrent model spend.
 # This guards a single process; more than one worker would need shared state.
 _run_slot = threading.BoundedSemaphore(1)
+
+
+@app.before_request
+def check_request_origin():
+    # Cookies alone do not protect same-site requests from hostile sibling sites.
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        if request.headers.get("Sec-Fetch-Site") == "cross-site" or (
+            origin and origin != request.host_url.rstrip("/")
+        ):
+            abort(403)
+
+
+@app.after_request
+def security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if request.path.startswith(("/api/", "/auth/")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def current_user():
@@ -104,12 +126,12 @@ def dev_open_access() -> bool:
 
 
 def may_run(user: str | None) -> bool:
-    """Runs need a signed-in user, and membership of the allowlist when set."""
+    """Production runs require explicit allowlist membership."""
     if dev_open_access():
         return True
     if user is None:
         return False
-    return not ALLOWED or user.lower() in ALLOWED
+    return user.lower() in ALLOWED or (IS_DEV and not ALLOWED)
 
 
 # --- auth ---------------------------------------------------------------
@@ -120,7 +142,8 @@ def login():
     # CSRF: this value must come back unchanged on the callback.
     state = secrets.token_urlsafe(24)
     session["oauth_state"] = state
-    session["post_login"] = request.args.get("next", "/")
+    next_path = request.args.get("next", "/")
+    session["post_login"] = next_path if (next_path.startswith("/") and not next_path.startswith("//") and "\\" not in next_path and not any(ord(c) < 32 for c in next_path)) else "/"
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": request.url_root.rstrip("/") + "/auth/callback",
@@ -213,6 +236,8 @@ def run():
         return jsonify(error=f"{user} is not on this server's allowlist"), 403
 
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict) or not isinstance(body.get("question", ""), str):
+        return jsonify(error="Expected a JSON object with a text question"), 400
     question = (body.get("question") or DEFAULT_QUESTION).strip()[:500]
     aid = body.get("aid")
     try:
@@ -231,7 +256,8 @@ def run():
         except GeneratorExit:  # client navigated away
             raise
         except Exception as exc:
-            yield "data: " + json.dumps({"type": "error", "msg": f"{type(exc).__name__}: {exc}"}) + "\n\n"
+            app.logger.exception("Research run failed")
+            yield "data: " + json.dumps({"type": "error", "msg": "Research run failed; check server logs."}) + "\n\n"
         finally:
             # Released here, not in the view: the generator outlives the request.
             _run_slot.release()
@@ -251,8 +277,11 @@ def index():
 
 @app.get("/<path:filename>")
 def static_files(filename):
-    target = (ROOT / filename).resolve()
-    if not str(target).startswith(str(ROOT)) or not target.is_file():
+    # Serve only deliberately published frontend files, never the repo root.
+    if filename != "assets/relay-mark.svg":
+        abort(404)
+    target = ROOT / filename
+    if target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):
         abort(404)
     return send_from_directory(ROOT, filename)
 
