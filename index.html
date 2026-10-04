@@ -1733,6 +1733,7 @@ async function refreshAuth(){
     if(!r.ok) throw new Error("no auth endpoint");
     const j=await r.json();
     AUTH.user=j.user; AUTH.mayRun=!!j.mayRun; AUTH.avatar=j.avatar; AUTH.reachable=true;
+    AUTH.devOpen=!!j.devOpen;
     try{ const c=await api("/api/config"); if(c.ok){ const cj=await c.json(); AUTH.configured=!!cj.authConfigured; AUTH.engine=!!cj.engine; } }catch(e){}
   }catch(e){ AUTH.reachable=false; AUTH.user=null; AUTH.mayRun=false; }
   renderAuth();
@@ -1747,6 +1748,9 @@ function renderAuth(){
   }else if(!AUTH.reachable){
     av.style.backgroundImage=""; av.textContent="–"; nm.textContent="Static preview";
     row.title="No server on this host — runs replay a recorded trace";
+  }else if(AUTH.devOpen){
+    av.style.backgroundImage=""; av.textContent="⌂"; nm.textContent="Local development";
+    row.title="Running locally with no OAuth app configured — sign-in is not required here";
   }else{
     av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Sign in with GitHub";
     row.title=AUTH.configured?"Sign in with GitHub":"Sign-in is not configured on this server";
@@ -1754,6 +1758,7 @@ function renderAuth(){
 }
 function authClick(){
   if(!AUTH.reachable){ toast("No server on this host — runs replay a recorded trace"); return; }
+  if(AUTH.devOpen){ toast("Local development — sign-in is not required here"); return; }
   if(AUTH.user){
     api("/auth/logout",{method:"POST"}).then(()=>{AUTH.user=null;AUTH.mayRun=false;renderAuth();toast("Signed out");});
   }else if(AUTH.configured){

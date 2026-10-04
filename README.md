@@ -67,9 +67,15 @@ cp .env.example .env          # fill in what you need; .env is gitignored
 python -m server.app          # http://localhost:8000
 ```
 
-Without `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` the interface still loads and
-the engine still runs from the command line, but sign-in is disabled and so
-`/api/run` will refuse. To run the pipeline directly, with no server:
+Then open http://localhost:8000 and press **Run**.
+
+Sign-in is not required for local development: when `RELAY_ENV=dev`, no OAuth
+app is configured, and the request comes from this machine, runs are allowed
+and the sidebar says "Local development". A deployment fails all three of those
+conditions, so it cannot be left open by accident. Configure OAuth and sign-in
+is required again, locally too.
+
+To run the pipeline directly, with no server:
 
 ```bash
 python -m medlab.run_pipeline            # synthetic fixture
