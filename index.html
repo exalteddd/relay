@@ -209,7 +209,10 @@ button{font-family:inherit;color:inherit;cursor:pointer}
   touch-action:none;cursor:grab;
 }
 .canvas.panning{cursor:grabbing}
-.world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+.world{position:absolute;top:0;left:0;transform-origin:0 0}
+/* Promote only while a gesture is running: a permanently promoted layer is
+   rasterized once and scaled, which is what made zoomed-in text grainy. */
+.canvas.panning .world,.canvas.zooming .world{will-change:transform}
 .edges{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;width:10px;height:10px}
 #nodes{position:absolute;top:0;left:0}
 
@@ -512,6 +515,8 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .menu .mi.danger{color:#c0392b}
 .menu .mi.danger:hover{background:rgba(192,57,43,.1)}
 :root[data-theme="dark"] .menu .mi.danger{color:#ff8a7a}
+button.brand{width:100%;background:transparent;border:0;cursor:pointer;text-align:left}
+button.brand:hover .wordmark{color:var(--accent-strong)}
 .form-error{margin-top:4px;font-size:12.5px;color:#c0392b;font-weight:600}
 :root[data-theme="dark"] .form-error{color:#ff8a7a}
 .btn.danger{background:#c0392b;border-color:#c0392b;color:#fff}
@@ -530,7 +535,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .approve .atext b{font-weight:700}
 
 /* menu (dropdown) */
-.menu{position:absolute;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;animation:pop .14s ease}
+@keyframes menupop{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+.menu{position:absolute;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;transform-origin:top left;animation:menupop .12s cubic-bezier(.2,.8,.3,1)}
+@media (prefers-reduced-motion:reduce){.menu{animation:none}}
 .menu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:8px;border:0;background:transparent;font-size:13px;font-weight:600;color:var(--ink);text-align:left}
 .menu .mi:hover{background:var(--surface-2)}
 .menu .mi .mi-ico{width:16px;height:16px;color:var(--ink-3);flex:0 0 auto}
@@ -601,7 +608,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 
   <!-- ============================ SIDEBAR ============================ -->
   <aside class="sidebar" id="sidebar">
-    <div class="brand" aria-label="Relay">
+    <button class="brand" id="brand" type="button" aria-label="Relay — fit the graph" title="Fit the graph to the screen">
       <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
         <path d="M11 20 L27.5 11" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
         <path d="M11 20 L19 30.5" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
@@ -610,7 +617,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
         <circle cx="11" cy="20" r="5.6" fill="var(--accent)"/>
       </svg>
       <span class="wordmark">relay</span>
-    </div>
+    </button>
 
     <div class="rail-head">
       <h2>Projects</h2>
@@ -628,7 +635,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
       <div class="foot-row" id="authRow" role="button" tabindex="0" title="Sign in with GitHub">
         <span class="avatar" id="authAvatar">?</span>
         <span id="authName">Not signed in</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto" title="Settings"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings" style="margin-left:auto;width:26px;height:26px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto" title="Settings"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        </button>
       </div>
     </div>
   </aside>
@@ -943,7 +952,7 @@ const BASE={
     ],
     edges:[{from:"sq",to:"sev",rel:"uses"},{from:"sev",to:"shA",rel:"supports"},{from:"sev",to:"shB",rel:"contradicts"},{from:"shA",to:"sexp",rel:"tests"},{from:"shB",to:"sexp",rel:"tests"},{from:"sexp",to:"sres",rel:"produced"}]
 }};
-const PROJECT_ORDER=["ndm1","materials","solar"];
+let PROJECT_ORDER=["ndm1","materials","solar"];   // user projects append; deleted ones drop out
 const PROJECT_ICON={
   flask:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>',
   layers:'<path d="M12 3 2 8l10 5 10-5-10-5zM2 14l10 5 10-5M2 11l10 5 10-5"/>',
@@ -961,6 +970,7 @@ let state={
   view:{},               // {pid:{tx,ty,scale}}
   previews:{},           // {pid:{nid:{open,x,y,w,h,tab}}}
   run:{active:false,log:[],mode:null,id:3,timers:[],abort:null},
+  deletedProjects:[],
   editing:false        // locked by default: structure is read-only and auto-spaced
 };
 function curProj(){return state.projects[state.project];}
@@ -972,6 +982,7 @@ const LSK="relay.state.v3";
 function loadPersist(){
   // clone base
   state.projects={};
+  PROJECT_ORDER=["ndm1","materials","solar"];
   for(const id of PROJECT_ORDER) state.projects[id]=JSON.parse(JSON.stringify(BASE[id]));
   let p=null;
   try{ p=JSON.parse(localStorage.getItem(LSK)||"null"); }catch(e){ p=null; }
@@ -988,6 +999,15 @@ function loadPersist(){
         for(const n of state.projects[pid].nodes){ const o=p.pos[pid][n.id]; if(o){n.x=o.x;n.y=o.y;} }
       }
     }
+    // Projects the user made are stored whole, since there is no base to diff.
+    if(p.userProjects){
+      for(const up of p.userProjects){ state.projects[up.id]=up; if(!PROJECT_ORDER.includes(up.id)) PROJECT_ORDER.push(up.id); }
+    }
+    if(Array.isArray(p.deletedProjects)){
+      for(const id of p.deletedProjects){ delete state.projects[id]; PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id); }
+      state.deletedProjects=p.deletedProjects.slice();
+    }
+    if(!state.projects[state.project]) state.project=PROJECT_ORDER[0];
     if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
     if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
   }
@@ -1013,6 +1033,8 @@ function savePersist(){
       }
       localStorage.setItem(LSK,JSON.stringify({
         dataMode:state.dataMode,theme:state.theme,project:state.project,editing:state.editing,
+        userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
+        deletedProjects:state.deletedProjects||[],
         view:state.view,previews:state.previews,pos,extraNodes,extraEdges
       }));
     }catch(e){/* storage may be unavailable; ignore */}
@@ -1055,7 +1077,12 @@ function applyTransform(smooth){
 function screenToWorld(sx,sy){ const v=view(); return {x:(sx-v.tx)/v.scale, y:(sy-v.ty)/v.scale}; }
 function canvasRect(){ return el.canvas.getBoundingClientRect(); }
 
+let zoomSettle=null;
 function zoomBy(factor,cx,cy){
+  // Mark the gesture so the compositor can cheat, then clear it so the
+  // layer re-rasterises crisply at the final scale.
+  el.canvas.classList.add("zooming");
+  clearTimeout(zoomSettle); zoomSettle=setTimeout(()=>el.canvas.classList.remove("zooming"),220);
   const v=view(); const ns=clamp(v.scale*factor,0.3,2.2);
   const r=canvasRect(); if(cx==null){cx=r.width/2;} if(cy==null){cy=r.height/2;}
   const wx=(cx-v.tx)/v.scale, wy=(cy-v.ty)/v.scale;
@@ -1090,6 +1117,7 @@ function renderProjects(){
     b.className="project"; b.setAttribute("aria-current",String(id===state.project));
     b.innerHTML=`<svg class="pj-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]||PROJECT_ICON.flask}</svg><span class="pj-name">${esc(p.name)}</span>`;
     b.addEventListener("click",()=>switchProject(id));
+    b.addEventListener("contextmenu",ev=>projectContextMenu(ev,id));
     el.projectList.appendChild(b);
   }
 }
@@ -1218,7 +1246,7 @@ function wireNode(d,n){
     ev.stopPropagation();          // don't start a canvas pan from the node
     if(state.editing){
       start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false;
-      d.setPointerCapture(ev.pointerId);
+      try{ d.setPointerCapture(ev.pointerId); }catch(e){}   // no capture for synthetic pointers
     } else {
       selectNode(n.id);
     }
@@ -2142,8 +2170,196 @@ $("#addNode").addEventListener("click",()=>{
   openMenu($("#addNode"),`<div class="m-head">Add node</div>${types.map(([t,l])=>`<button class="mi" data-add="${t}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(t)}"></span><span>${esc(l)}</span></button>`).join("")}`,
     m=>{ $$("[data-add]",m).forEach(b=>b.addEventListener("click",()=>{ closeMenus(); openNodeForm(b.dataset.add); })); });
 });
-$("#addProject").addEventListener("click",()=>toast("New project — scaffolds a fresh research graph (demo)"));
-$("#shareBtn").addEventListener("click",()=>toast("Share link copied (demo)"));
+/* ============================== projects =============================== */
+function createProject(name,question){
+  const id="p-"+Math.random().toString(36).slice(2,7);
+  const q=P("q-"+id,"question","Research question",question,"done",0,0,{objective:question});
+  q.origin="user";
+  const proj={id,name,icon:"flask",run:"No runs yet",primaryExp:null,resultNode:null,nodes:[q],edges:[]};
+  state.projects[id]=proj; PROJECT_ORDER.push(id);
+  state.deletedProjects=(state.deletedProjects||[]).filter(x=>x!==id);
+  renderProjects(); switchProject(id); savePersist();
+  toast(`Created “${name}”`);
+}
+
+function openProjectForm(){
+  modal(`
+    <div class="modal-head"><div><h2>New project</h2>
+      <p>A project is one investigation. It starts from the question you want answered.</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body"><div class="node-form">
+      <div class="field"><label class="flab">Project name <span class="req">required</span></label>
+        <input data-f="name" placeholder="NDM-1 triage"></div>
+      <div class="field"><label class="flab">Research question <span class="req">required</span></label>
+        <textarea data-f="question" rows="3" placeholder="Which untested compounds are most likely to inhibit NDM-1?"></textarea></div>
+      <div class="form-error" id="formErr" hidden></div>
+    </div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="projGo">Create project</button></div>
+  `,root=>{
+    root.querySelector("[data-f]").focus();
+    root.querySelector("#projGo").addEventListener("click",()=>{
+      const name=root.querySelector('[data-f="name"]').value.trim();
+      const question=root.querySelector('[data-f="question"]').value.trim();
+      const miss=[!name&&"Project name",!question&&"Research question"].filter(Boolean);
+      if(miss.length){ const e=root.querySelector("#formErr"); e.textContent="Still needed: "+miss.join(", "); e.hidden=false; return; }
+      closeModal(); createProject(name,question);
+    });
+  });
+}
+
+function deleteProject(id){
+  const proj=state.projects[id]; if(!proj) return;
+  if(PROJECT_ORDER.length<=1){ toast("This is the only project"); return; }
+  modal(`
+    <div class="modal-head"><div><h2>Delete “${esc(proj.name)}”?</h2>
+      <p>Its graph and any runs recorded against it are removed from this browser. This cannot be undone.</p></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Keep it</button>
+      <button class="btn danger" id="projDel">Delete project</button></div>
+  `,root=>{
+    root.querySelector("#projDel").addEventListener("click",()=>{
+      closeModal();
+      delete state.projects[id];
+      PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id);
+      // Remembered so a built-in does not reappear from BASE on reload.
+      state.deletedProjects=[...new Set([...(state.deletedProjects||[]),id])];
+      delete state.view[id]; delete state.previews[id];
+      if(state.project===id) switchProject(PROJECT_ORDER[0]);
+      renderProjects(); savePersist();
+      toast(`Deleted “${proj.name}”`);
+    });
+  });
+}
+
+function projectContextMenu(ev,id){
+  ev.preventDefault();
+  const proj=state.projects[id];
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(proj.name)}</div>
+    <button class="mi" data-pm="open"><span>Open</span></button>
+    <button class="mi" data-pm="rename"><span>Rename…</span></button>
+    <div class="m-sep"></div>
+    <button class="mi danger" data-pm="delete"><span>Delete project</span></button>
+  `,m=>{
+    $$("[data-pm]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.pm; closeMenus();
+      if(a==="open") switchProject(id);
+      else if(a==="delete") deleteProject(id);
+      else if(a==="rename") renameProject(id);
+    }));
+  });
+}
+
+function renameProject(id){
+  const proj=state.projects[id];
+  modal(`
+    <div class="modal-head"><div><h2>Rename project</h2></div></div>
+    <div class="modal-body"><div class="node-form"><div class="field">
+      <label class="flab">Name</label><input data-f="name" value="${esc(proj.name)}"></div></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="renGo">Save</button></div>
+  `,root=>{
+    const inp=root.querySelector("[data-f]"); inp.focus(); inp.select();
+    root.querySelector("#renGo").addEventListener("click",()=>{
+      const v=inp.value.trim(); if(!v) return;
+      proj.name=v; closeModal(); renderProjects(); renderCrumb(); savePersist(); toast("Renamed");
+    });
+  });
+}
+
+$("#addProject").addEventListener("click",openProjectForm);
+
+/* Share copies the address rather than pretending to. */
+$("#shareBtn").addEventListener("click",async()=>{
+  try{ await navigator.clipboard.writeText(location.href); toast("Link copied"); }
+  catch(e){ toast(location.href); }
+});
+
+/* The wordmark goes home: clear what is open and frame the whole graph. */
+$("#brand").addEventListener("click",()=>{
+  closeMenus(); closeModal();
+  if(state.selection) clearSelection();
+  fit(true);
+});
+
+/* ============================== settings =============================== */
+function openSettings(){
+  const sysTheme=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
+  modal(`
+    <div class="modal-head"><div><h2>Settings</h2><p>These apply to this browser.</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="field"><label class="flab">Appearance</label>
+        <select data-s="theme">
+          <option value="">Match system (${sysTheme})</option>
+          <option value="light"${state.theme==="light"?" selected":""}>Light</option>
+          <option value="dark"${state.theme==="dark"?" selected":""}>Dark</option>
+        </select></div>
+      <div class="field"><label class="flab">Diagram</label>
+        <select data-s="editing">
+          <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
+          <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
+        </select></div>
+      <div class="section"><h3>Account</h3><dl class="kv">
+        <dt>Signed in as</dt><dd>${esc(AUTH.user||(AUTH.devOpen?"local development":"not signed in"))}</dd>
+        <dt>Can start runs</dt><dd>${AUTH.mayRun?"yes":"no"}</dd>
+        <dt>Server</dt><dd>${AUTH.reachable?(AUTH.engine?"engine available":"no engine"):"static — runs replay a trace"}</dd>
+      </dl></div>
+      <div class="section"><h3>Keyboard</h3><dl class="kv">
+        <dt>F</dt><dd>Fit the graph to the screen</dd>
+        <dt>T</dt><dd>Tidy the layout</dd>
+        <dt>E</dt><dd>Toggle editing</dd>
+        <dt>Del</dt><dd>Delete the selected node</dd>
+        <dt>Esc</dt><dd>Close the pane or menu</dd>
+      </dl></div>
+      <div class="section"><h3>Local data</h3>
+        <div class="prose"><p>Your graphs, added nodes and layout live in this browser only — they are not on the server and not shared with anyone else.</p></div>
+        ${actionRow([{id:"wipe",label:"Reset this browser's data"}])}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn primary" data-close>Done</button></div>
+  `,root=>{
+    root.querySelector('[data-s="theme"]').addEventListener("change",e=>{
+      state.theme=e.target.value||null; applyTheme(); savePersist(); renderEdges(); renderMinimap();
+    });
+    root.querySelector('[data-s="editing"]').addEventListener("change",e=>{
+      setEditing(e.target.value==="editing");
+    });
+    root.querySelector('[data-paneact="wipe"]')?.addEventListener("click",()=>{
+      if(!confirm("Clear every graph, added node and layout stored in this browser?")) return;
+      try{ localStorage.removeItem(LSK); }catch(e){}
+      location.reload();
+    });
+  });
+}
+
+/* ============================ account menu ============================= */
+function openAccountMenu(anchor){
+  const signedIn=!!AUTH.user;
+  openMenu(anchor,`
+    <div class="m-head">${esc(AUTH.user||(AUTH.devOpen?"Local development":"Not signed in"))}</div>
+    ${signedIn
+      ? `<button class="mi" data-am="profile"><span>Open GitHub profile</span></button>
+         <button class="mi" data-am="signout"><span>Sign out</span></button>`
+      : AUTH.devOpen
+        ? `<div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Running locally with no OAuth app configured, so sign-in is not needed here.</div>`
+        : AUTH.reachable
+          ? `<button class="mi" data-am="signin"><span>Sign in with GitHub</span></button>
+             <button class="mi" data-am="signup"><span>Create a GitHub account</span></button>`
+          : `<div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">No server on this host, so there is nothing to sign in to.</div>`}
+    <div class="m-sep"></div>
+    <button class="mi" data-am="settings"><span>Settings…</span></button>
+  `,m=>{
+    $$("[data-am]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.am; closeMenus();
+      if(a==="signin") window.location.href=(CFG.backendUrl||"")+"/auth/login?next="+encodeURIComponent(location.pathname);
+      else if(a==="signup") window.open("https://github.com/signup","_blank","noopener");
+      else if(a==="profile") window.open("https://github.com/"+encodeURIComponent(AUTH.user),"_blank","noopener");
+      else if(a==="signout") api("/auth/logout",{method:"POST"}).then(()=>{AUTH.user=null;AUTH.mayRun=false;renderAuth();toast("Signed out");});
+      else if(a==="settings") openSettings();
+    }));
+  });
+}
 
 /* =============================== run flow ============================= */
 $("#runBtn").addEventListener("click",()=>{
@@ -2240,6 +2456,9 @@ function renderAuth(){
   }
 }
 function authClick(){
+  openAccountMenu($("#authRow"));
+}
+function authClickLegacy(){
   if(!AUTH.reachable){ toast("No server on this host — runs replay a recorded trace"); return; }
   if(AUTH.devOpen){ toast("Local development — sign-in is not required here"); return; }
   if(AUTH.user){
@@ -2251,6 +2470,8 @@ function authClick(){
   }
 }
 document.addEventListener("DOMContentLoaded",()=>{
+  const sb=$("#settingsBtn");
+  if(sb) sb.addEventListener("click",e=>{ e.stopPropagation(); closeMenus(); openSettings(); });
   const row=$("#authRow");
   if(row){ row.addEventListener("click",authClick);
     row.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();authClick();} }); }
