@@ -34,7 +34,11 @@ from pathlib import Path
 import requests
 from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory, session
 
+from server import store
 from server.pipeline_runner import DEFAULT_QUESTION, engine_available, run_events
+from server.narrative import bp as narrative_bp
+from server.projects import bp as projects_bp
+from server.scaffold import bp as scaffold_bp
 from server.research_runner import research_events, resolve_mode
 
 # Load .env for local development. Real environments (Render) set these in the
@@ -87,6 +91,20 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # survives the OAuth redirect, blocks cross-site POSTs
     SESSION_COOKIE_SECURE=not IS_DEV,  # HTTPS-only off localhost
 )
+
+app.register_blueprint(projects_bp)
+app.register_blueprint(narrative_bp)
+app.register_blueprint(scaffold_bp)
+
+# Create the project tables once at boot. A failure here is reported rather
+# than fatal: /api/health stays up so the cause is visible, and the project
+# endpoints surface the real error instead of the service refusing to start.
+STORAGE_READY = True
+try:
+    store.init()
+except Exception as exc:  # noqa: BLE001 - surfaced through /api/config
+    STORAGE_READY = False
+    print(f"[relay] storage unavailable ({store.engine_name()}): {type(exc).__name__}: {exc}")
 
 
 # One run at a time. A screen peaks around 380MB, so two at once exceed the
@@ -250,6 +268,10 @@ def config():
         authRequired=True,
         engine=engine_available(),
         allowlistActive=bool(ALLOWED),
+        # "sqlite" in a real deployment means DATABASE_URL is missing and
+        # projects are sitting on a disk that is wiped on the next deploy.
+        storage=store.engine_name(),
+        storageReady=STORAGE_READY,
     )
 
 

@@ -255,18 +255,41 @@ def run_events(question: str = DEFAULT_QUESTION, aid: int | None = None, trace_d
     trace_dir.mkdir(parents=True, exist_ok=True)
     assembled = trace.assemble(trace_dir / "trace.json")
 
+    # The payload carries the measured curves as well as the scalars, so the
+    # exported report draws the run that just happened rather than a stored
+    # example. Keys absent from `res` stay absent here: the report renders a
+    # stated gap for a missing figure, which is the honest rendering of a
+    # metric the run did not produce.
     payload = {
         "source": assembled.get("source") or res.get("source"),
         "roc_auc": auc,
         "ef_top1pct": ef1,
         "ef_top5pct": ef5,
         "n_compounds": res.get("n_compounds"),
-        "n_test": res.get("n_test"),
+        "n_active": res.get("n_active"),
         "base_rate": res.get("base_rate"),
+        "n_train": res.get("n_train"),
+        "n_test": res.get("n_test"),
+        "control_random_ef1": res.get("control_random_ef1"),
+        "control_yscramble_auc": res.get("control_yscramble_auc"),
         "passed": passed,
         "next": verdict.get("next"),
-        # The charts and tables for this run, computed from its own ranking.
+        # Two views of the same run, for two consumers. `charts` is the live
+        # dashboard: an enrichment curve with a bootstrap band and a measured
+        # random-ranking control, built here from ranked.json. `figures` is the
+        # report's raw material -- ROC points and score distributions computed
+        # in the screen from the same (y_test, scores) as the scalars above.
+        # Neither is derived from the other, and neither substitutes a value.
         "charts": build_chart_data(res, trace_dir),
+        "figures": {
+            "roc_curve": res.get("roc_curve") or [],
+            "enrichment_curve": res.get("enrichment_curve") or [],
+            "random_curve": res.get("random_curve") or [],
+            "score_bins": res.get("score_bins") or [],
+            "score_hist_active": res.get("score_hist_active") or [],
+            "score_hist_inactive": res.get("score_hist_inactive") or [],
+        },
+        "top_hits": res.get("top_hits") or [],
     }
     yield {"type": "status", "node": "res", "status": "done"}
     yield {"type": "status", "node": "exp", "status": "done"}

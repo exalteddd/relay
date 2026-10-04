@@ -73,6 +73,17 @@ class ScreenResult:
     assays_saved_factor: float          # = ef_top1pct, reads as "x fewer assays per hit"
     top_hits: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # --- figure data -----------------------------------------------------
+    # Measured curves for the exported report. These are computed from the
+    # same held-out predictions as the scalars above, so a figure and the
+    # number beside it can never disagree. Nothing here is modelled or
+    # smoothed: a report must not draw a curve the run did not produce.
+    roc_curve: list[list[float]] = field(default_factory=list)       # [[fpr, tpr], ...]
+    enrichment_curve: list[list[float]] = field(default_factory=list)  # [[depth%, EF], ...]
+    random_curve: list[list[float]] = field(default_factory=list)      # same depths, random ranking
+    score_bins: list[float] = field(default_factory=list)              # histogram bin centres
+    score_hist_active: list[int] = field(default_factory=list)
+    score_hist_inactive: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         from dataclasses import asdict
@@ -130,6 +141,36 @@ def run_screen(records: list[dict], seed: int = 0, n_estimators: int = 300,
     scores_scr = clf_scr.predict_proba(X[test])[:, 1]
     auc_scr = float(roc_auc_score(y_test, scores_scr)) if len(set(y_test)) > 1 else float("nan")
 
+    # --- measured curves for the report -----------------------------------
+    # Every point below comes from (y_test, scores). Depths are capped at the
+    # test-set size, and a depth that would select fewer than one compound is
+    # skipped rather than reported as zero.
+    def _roc_points(y_true, sc, max_points: int = 120):
+        from sklearn.metrics import roc_curve as _rc
+
+        if len(set(y_true)) < 2:
+            return []
+        fpr, tpr, _ = _rc(y_true, sc)
+        step = max(1, len(fpr) // max_points)
+        pts = [[round(float(fpr[i]), 4), round(float(tpr[i]), 4)]
+               for i in range(0, len(fpr), step)]
+        if pts[-1] != [1.0, 1.0]:
+            pts.append([1.0, 1.0])
+        return pts
+
+    depths = [d for d in (0.5, 1, 2, 5, 10, 20, 30, 50, 75, 100)
+              if int(round(d / 100 * len(y_test))) >= 1]
+    ef_curve = [[d, round(enrichment_factor(y_test, scores, d / 100), 3)] for d in depths]
+    rng_c = np.random.default_rng(seed + 2)
+    rand_curve = [[d, round(float(np.mean([enrichment_factor(y_test, rng_c.random(len(y_test)), d / 100)
+                                           for _ in range(10)])), 3)] for d in depths]
+
+    n_bins = 20
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    centres = [round(float((edges[i] + edges[i + 1]) / 2), 3) for i in range(n_bins)]
+    hist_act = np.histogram(scores[y_test == 1], bins=edges)[0].tolist()
+    hist_inact = np.histogram(scores[y_test == 0], bins=edges)[0].tolist()
+
     order = np.argsort(-scores)
     # Spread of the ensemble's own votes on each shortlisted compound — a real
     # measure of how much the forest disagrees with itself, not a placeholder.
@@ -155,4 +196,7 @@ def run_screen(records: list[dict], seed: int = 0, n_estimators: int = 300,
         ef_top1pct=round(ef1, 2), ef_top5pct=round(ef5, 2),
         control_random_ef1=round(ef1_rand, 2), control_yscramble_auc=round(auc_scr, 3),
         assays_saved_factor=round(ef1, 2), top_hits=top_hits, notes=notes,
+        roc_curve=_roc_points(y_test, scores),
+        enrichment_curve=ef_curve, random_curve=rand_curve,
+        score_bins=centres, score_hist_active=hist_act, score_hist_inactive=hist_inact,
     )

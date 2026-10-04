@@ -39,3 +39,22 @@ services:
         value: low
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Powers the report's "Write narrative" button. Optional: without it the
+      # report still exports, using its assembled prose.
+      - key: BRAIN_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      # Per-user projects. Render injects the connection string from the
+      # database declared below; without it the store falls back to SQLite on
+      # the instance's ephemeral disk and every account is lost on redeploy.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: relay-db
+          property: connectionString
+
+databases:
+  - name: relay-db
+    plan: free
+    databaseName: relay
+    user: relay

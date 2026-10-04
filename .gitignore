@@ -24,6 +24,12 @@ relay_data/trace.json
 medlab/relay_data/events.jsonl
 medlab/relay_data/ranked.json
 
+
+# Local project store (SQLite fallback when DATABASE_URL is unset)
+relay.db
+relay.db-journal
+*.sqlite3
+
 # Ignore all local environment variants, keeping the example template.
 .env.*
 !.env.example
