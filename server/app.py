@@ -301,6 +301,10 @@ def run():
             return jsonify(error="Sign in with GitHub to start a run", loginUrl="/auth/login"), 401
         return jsonify(error=f"{user} is not on this server's allowlist"), 403
 
+    # The global cap is sized for saved graphs; a run request is a question
+    # and a couple of fields, so hold it to the tighter bound it had before.
+    if (request.content_length or 0) > 16 * 1024:
+        return jsonify(error="Request too large"), 413
     body = request.get_json(silent=True) or {}
     if not isinstance(body, dict) or not isinstance(body.get("question", ""), str):
         return jsonify(error="Expected a JSON object with a text question"), 400
