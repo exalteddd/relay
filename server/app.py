@@ -28,6 +28,7 @@ import json
 import os
 import secrets
 import threading
+import time
 from pathlib import Path
 
 import requests
@@ -82,6 +83,9 @@ app.config.update(
 # doubles as a cap on concurrent model spend.
 # This guards a single process; more than one worker would need shared state.
 _run_slot = threading.BoundedSemaphore(1)
+# Who holds it and since when, so a second person is told what they are
+# waiting for rather than just being refused.
+_run_holder = {"user": None, "started": 0.0}
 
 
 @app.before_request
@@ -246,8 +250,13 @@ def run():
         return jsonify(error="aid must be an integer PubChem assay id"), 400
 
     if not _run_slot.acquire(blocking=False):
-        return jsonify(error="Another run is in progress on this server. "
-                             "Runs are handled one at a time; try again in a moment."), 429
+        who = _run_holder["user"] or "someone"
+        elapsed = int(time.time() - (_run_holder["started"] or time.time()))
+        return jsonify(
+            error=f"{who} is already running one. Runs go one at a time on this server.",
+            busy=True, busyWith=who, elapsedSec=elapsed,
+        ), 429
+    _run_holder.update(user=user or "local", started=time.time())
 
     def stream():
         try:
@@ -260,6 +269,7 @@ def run():
             yield "data: " + json.dumps({"type": "error", "msg": "Research run failed; check server logs."}) + "\n\n"
         finally:
             # Released here, not in the view: the generator outlives the request.
+            _run_holder.update(user=None, started=0.0)
             _run_slot.release()
 
     return Response(

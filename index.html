@@ -2329,16 +2329,32 @@ async function runViaBackend(expId,runId){
     const res=await api("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({project:curProj().id,experiment:expId,runId,dataMode:state.dataMode,
         question:state.question||curProj().question||""}),signal:ctl.signal});
-    // A refused run is not a dropped stream: say why instead of quietly replaying.
-    if(res.status===401||res.status===403||res.status===429){
+    // Busy is not failure. One run happens at a time because two will not fit
+    // in the instance's memory, so wait for the slot instead of giving up --
+    // during a demo the second person should queue, not see an error.
+    if(res.status===429){
       const j=await res.json().catch(()=>({}));
-      const why=j.error||(res.status===429?"The server is busy with another run":"Not authorised to start a run");
-      logEvent({agent:"Relay",msg:why,st:"failed"});
-      setStatus(expId,"planned"); finishRun(expId,runId,true);
-      toast(why);
-      if(res.status!==429) refreshAuth();
+      if(state.run.waits==null) state.run.waits=0;
+      if(state.run.waits===0) logEvent({agent:"Relay",msg:j.error||"Waiting for the current run to finish",st:"running"});
+      if(state.run.waits++ < 40 && state.run.active){
+        $("#runTxt").textContent="Waiting for "+(j.busyWith||"another run");
+        await new Promise(r=>setTimeout(r,6000));
+        return runViaBackend(expId,runId);          // try again for the slot
+      }
+      logEvent({agent:"Relay",msg:"Gave up waiting for the server",st:"failed"});
+      setStatus(expId,"planned"); finishRun(expId,runId,true); toast("Server stayed busy");
       return;
     }
+    // A refused run is not a dropped stream: say why instead of quietly replaying.
+    if(res.status===401||res.status===403){
+      const j=await res.json().catch(()=>({}));
+      const why=j.error||"Not authorised to start a run";
+      logEvent({agent:"Relay",msg:why,st:"failed"});
+      setStatus(expId,"planned"); finishRun(expId,runId,true);
+      toast(why); refreshAuth();
+      return;
+    }
+    state.run.waits=0;
     if(!res.ok||!res.body) throw new Error("no stream");
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
     while(true){ const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
