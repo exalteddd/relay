@@ -116,6 +116,18 @@ _run_slot = threading.BoundedSemaphore(1)
 # Who holds it and since when, so a second person is told what they are
 # waiting for rather than just being refused.
 _run_holder = {"user": None, "started": 0.0}
+# Nothing here runs for an hour. A slot still held past that is a leak, not
+# work, so the next caller takes it rather than being refused forever.
+RUN_SLOT_MAX_SECONDS = 3600
+
+
+def _reclaim_stale_slot() -> bool:
+    started = _run_holder.get("started") or 0.0
+    if started and (time.time() - started) > RUN_SLOT_MAX_SECONDS:
+        app.logger.warning("reclaiming a run slot held for %.0fs", time.time() - started)
+        _run_holder.update(user=None, started=0.0)
+        return True          # caller proceeds; the stale holder cannot release twice
+    return False
 
 
 @app.before_request
@@ -409,13 +421,23 @@ def run():
         return jsonify(error="aid must be an integer PubChem assay id"), 400
 
     if not _run_slot.acquire(blocking=False):
-        who = _run_holder["user"] or "someone"
-        elapsed = int(time.time() - (_run_holder["started"] or time.time()))
-        return jsonify(
-            error=f"{who} is already running one. Runs go one at a time on this server.",
-            busy=True, busyWith=who, elapsedSec=elapsed,
-        ), 429
+        if not _reclaim_stale_slot():
+            who = _run_holder["user"] or "someone"
+            elapsed = int(time.time() - (_run_holder["started"] or time.time()))
+            return jsonify(
+                error=f"{who} is already running one. Runs go one at a time on this server.",
+                busy=True, busyWith=who, elapsedSec=elapsed,
+            ), 429
     _run_holder.update(user=user or "local", started=time.time())
+    released = threading.Event()
+
+    def release_slot():
+        """Give the slot back exactly once, however the request ends."""
+        if released.is_set():
+            return
+        released.set()
+        _run_holder.update(user=None, started=0.0)
+        _run_slot.release()
 
     # Which engine can answer this. Literature reasoning works for any
     # question; the compound screen only for the one thing it does.
@@ -444,15 +466,19 @@ def run():
             app.logger.exception("Research run failed")
             yield "data: " + json.dumps({"type": "error", "msg": "Research run failed; check server logs."}) + "\n\n"
         finally:
-            # Released here, not in the view: the generator outlives the request.
-            _run_holder.update(user=None, started=0.0)
-            _run_slot.release()
+            release_slot()
 
-    return Response(
+    response = Response(
         stream(),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+    # The generator's finally only runs if the generator runs. A client that
+    # disconnects before reading a byte leaves it untouched, and the slot was
+    # then held forever -- every later run answered 429 with nothing running.
+    # call_on_close fires whether or not anything was iterated.
+    response.call_on_close(release_slot)
+    return response
 
 
 # --- static frontend ----------------------------------------------------

@@ -1596,9 +1596,7 @@ function setEditing(on){
   $("#editBtnLabel").textContent=state.editing?"Done":"Connect";
   b.title=state.editing?"Finish connecting (E)":"Change connections (E)";
   renderGraph(); savePersist();
-  toast(state.editing
-    ? "Connecting — drag a node's right edge onto another, or right-click a link to change it"
-    : "Locked — connections are fixed");
+
 }
 
 function wireNode(d,n){
@@ -2434,7 +2432,6 @@ function layoutGraph(p){
 function tidy(){
   layoutGraph(curProj());
   renderGraph(); savePersist(); fit(true);
-  toast("Graph arranged");
 }
 
 /* ========================= adding & removing nodes =====================
@@ -2940,7 +2937,7 @@ async function createProject(name,question){
     doc.id=id; state.projects[id]=doc; PROJECT_ORDER.push(id);
     state.deletedProjects=(state.deletedProjects||[]).filter(x=>x!==id);
     renderProjects(); switchProject(id); savePersist();
-    toast(`Created “${name}”`); return;
+    return;
   }
   try{
     const r=await api("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -2949,8 +2946,7 @@ async function createProject(name,question){
     const j=await r.json();
     doc.id=j.id; state.projects[j.id]=doc; PROJECT_ORDER.push(j.id);
     renderProjects(); switchProject(j.id);
-    toast(`Created “${name}”`);
-  }catch(e){ toast("Offline — could not create project"); }
+    }catch(e){ toast("Offline — could not create project"); }
 }
 
 function openProjectForm(){
@@ -3529,7 +3525,10 @@ async function runViaBackend(expId,runId){
       toast(why); refreshAuth();
       return;
     }
+    // The retry loop renamed the bar while waiting; once a stream is open it
+    // is running, so put the label back.
     state.run.waits=0;
+    $("#runTxt").textContent="Running";
     if(!res.ok||!res.body) throw new Error("no stream");
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
     while(true){ const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
