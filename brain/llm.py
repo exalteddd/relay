@@ -64,12 +64,13 @@ class LLM:
                                             messages=[{"role": "user", "content": prompt}])
             self._track(r.usage.input_tokens, r.usage.output_tokens)
             return "".join(b.text for b in r.content if b.type == "text")
-        r = self._openai_create(model, system, prompt, max_tokens, json_mode)
+        r = self._openai_create(model, system, prompt, max_tokens, json_mode, fast)
         if r.usage:
             self._track(r.usage.prompt_tokens, r.usage.completion_tokens)
         return r.choices[0].message.content or ""
 
-    def _openai_create(self, model: str, system: str, prompt: str, max_tokens: int, json_mode: bool):
+    def _openai_create(self, model: str, system: str, prompt: str, max_tokens: int,
+                       json_mode: bool, fast: bool = False):
         """Call an OpenAI-compatible endpoint, adapting to what it accepts.
 
         Two parameters vary across endpoints, so each is tried once and the
@@ -90,31 +91,48 @@ class LLM:
 
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
         swapped_token_param = False
-        for _ in range(4):  # at most one fallback per adaptable parameter
-            reasoning = self.cfg.reasoning_effort if self._token_param == "max_completion_tokens" else None
-            # Reasoning tokens come out of the same budget, so leave headroom.
-            budget = max_tokens * 3 if self._token_param == "max_completion_tokens" else max_tokens
+        widened = 0
+        for _ in range(6):  # one fallback per adaptable parameter, plus budget retries
+            reasoning_model = self._token_param == "max_completion_tokens"
+            effort = (self.cfg.fast_reasoning_effort if fast else self.cfg.reasoning_effort)
+            # Reasoning tokens are spent from the same allowance as the answer,
+            # so a reasoning model needs far more headroom than the text itself.
+            budget = max_tokens * (4 << widened) if reasoning_model else max_tokens
             kwargs = {"model": model, "messages": messages, self._token_param: budget}
             if json_mode and self._json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
-            if reasoning:
-                kwargs["reasoning_effort"] = reasoning
+            if reasoning_model and effort:
+                kwargs["reasoning_effort"] = effort
             try:
-                return self.client.chat.completions.create(**kwargs)
+                r = self.client.chat.completions.create(**kwargs)
             except openai.BadRequestError as e:
-                msg = str(e).lower()
-                # Endpoints phrase this either way -- naming the parameter they
-                # reject, or the one they want instead. Either means: swap.
-                if not swapped_token_param and ("max_tokens" in msg or "max_completion_tokens" in msg):
-                    self._token_param = ("max_tokens" if self._token_param == "max_completion_tokens"
-                                         else "max_completion_tokens")
-                    swapped_token_param = True
-                elif ("response_format" in msg or "json_object" in msg) and self._json_mode:
-                    self._json_mode = False
-                elif "reasoning_effort" in msg and self.cfg.reasoning_effort:
-                    self.cfg.reasoning_effort = None
-                else:
-                    raise
+                before = self._token_param
+                self._adapt(str(e).lower(), e, swapped_token_param)
+                swapped_token_param = swapped_token_param or self._token_param != before
+                continue
+            # A model that thinks past its allowance returns nothing at all.
+            # Say so, rather than letting it surface as unparseable output.
+            if r.choices[0].finish_reason == "length" and not (r.choices[0].message.content or "").strip():
+                if widened < 2:
+                    widened += 1
+                    continue
+                raise RuntimeError(
+                    f"{model} hit its {budget}-token limit while reasoning and returned no answer. "
+                    f"Lower BRAIN_FAST_REASONING_EFFORT, or send smaller batches.")
+            return r
+        raise RuntimeError(f"{model}: no usable response after adapting request parameters")
+
+    def _adapt(self, msg: str, exc, swapped_token_param: bool) -> None:
+        """Turn a rejected parameter into a changed setting, or re-raise."""
+        if not swapped_token_param and ("max_tokens" in msg or "max_completion_tokens" in msg):
+            self._token_param = ("max_tokens" if self._token_param == "max_completion_tokens"
+                                 else "max_completion_tokens")
+        elif ("response_format" in msg or "json_object" in msg) and self._json_mode:
+            self._json_mode = False
+        elif "reasoning_effort" in msg:
+            self.cfg.reasoning_effort = self.cfg.fast_reasoning_effort = None
+        else:
+            raise exc
 
     def json(self, task: str, system: str, prompt: str, fast: bool = False,
              max_tokens: int = 4096, context: dict | None = None):

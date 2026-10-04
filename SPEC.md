@@ -239,10 +239,32 @@ or the precise wording of progress messages.
 The ordering below front-loads the thing that is currently a lie (the question
 does nothing) and defers polish.
 
-**Phase 0 — unblock.** Obtain a model API key and confirm `run_research` works
-end to end from the command line on a real question. Nothing else can be
-validated until this is true. This is also the moment to measure a real run's
-wall-clock time and token cost, which several later decisions depend on.
+**Phase 0 — unblock. DONE (2026-10-04).** Measured on
+*"What is the evidence that GLP-1 receptor agonists reduce major adverse
+cardiovascular events in adults with type 2 diabetes?"*, OpenAI provider,
+gpt-5-mini strong / gpt-5-nano fast:
+
+| | |
+|---|---|
+| Wall clock | **141s (2.4 min)**, completed |
+| Cost | **$0.036** per run |
+| Model calls | 13 (4 strong, 9 fast); 49.2K input, 29.6K output tokens |
+| Literature | 315 papers found, 60 screened, 25 kept |
+| Output | 33 grounded claims, 8 themes, 2 contradictions, 6 gaps, 6 hypotheses |
+| Rejected | 6 claims dropped — quote not verbatim in the abstract |
+
+Three findings that change later phases:
+
+- **2.4 minutes per run confirms runs must be background jobs.** No HTTP
+  request should be held that long, and a refresh must not lose the work.
+- **Reasoning effort is the dominant cost and latency lever.** The first
+  attempt, at the fast tier's default effort, spent 97.8K output tokens, cost
+  $0.045 and *failed* at extraction after 303s: the model reasoned past its
+  token allowance and returned nothing. At `low` effort the same work costs
+  $0.036 and finishes in 141s — cheaper and twice as fast.
+- **Semantic Scholar rate-limits anonymous requests** (all 4 source errors were
+  429s). A free `S2_API_KEY` should be configured before the evidence base is
+  judged thin.
 
 **Phase 1 — make the question real.** Job abstraction, run-mode resolver,
 research driver, question routed to the general pipeline, stage events streamed.
@@ -264,9 +286,9 @@ only then describe the system as Omnigent-orchestrated.
 
 ### Deployment checklist
 
-- [ ] Model API key obtained and set in the server environment only
-- [ ] `run_research` verified end to end on a real question, offline of the UI
-- [ ] Real run cost and duration measured, and the hosting plan chosen to fit
+- [x] Model API key obtained and set in the server environment only
+- [x] `run_research` verified end to end on a real question, offline of the UI
+- [x] Real run cost and duration measured (141s, $0.036) — hosting plan still to choose
 - [ ] Background job execution working, with runs surviving a refresh
 - [ ] Rate limit and daily spend cap enforced before a run starts
 - [ ] GitHub OAuth app created with the deployed callback URL

@@ -30,7 +30,11 @@ class Config:
     openalex_email: str | None
     openalex_api_key: str | None
     s2_api_key: str | None
-    reasoning_effort: str | None = None   # gpt-5 family: minimal | low | medium | high
+    # gpt-5 family: minimal | low | medium | high. The fast tier does bulk
+    # screening and extraction, where deep reasoning mostly burns budget, so it
+    # defaults lower than the strong tier.
+    reasoning_effort: str | None = None
+    fast_reasoning_effort: str | None = "low"
 
     @property
     def projects_dir(self) -> Path:
@@ -66,4 +70,5 @@ def load_config() -> Config:
         openalex_api_key=os.getenv("OPENALEX_API_KEY"),
         s2_api_key=os.getenv("S2_API_KEY"),
         reasoning_effort=os.getenv("BRAIN_REASONING_EFFORT") or None,
+        fast_reasoning_effort=os.getenv("BRAIN_FAST_REASONING_EFFORT", "low") or None,
     )
