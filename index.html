@@ -647,7 +647,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
 
   <!-- ============================ SIDEBAR ============================ -->
   <aside class="sidebar" id="sidebar">
-    <button class="brand" id="brand" type="button" aria-label="Relay — fit the graph" title="Fit the graph to the screen">
+    <button class="brand" id="brand" type="button" aria-label="Relay on GitHub" title="Open the source on GitHub">
       <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
         <path d="M11 20 L27.5 11" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
         <path d="M11 20 L19 30.5" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
@@ -2237,6 +2237,26 @@ $("#provenance").addEventListener("click",()=>{
 
 /* Take the charts, shortlist and headline stats from a finished run. The
    bundled sample stays selectable, so a viewer can always see which is which. */
+/* Replace the project's graph with what the run produced. The previous graph
+   was this project's previous answer, so keeping both would leave two
+   unrelated investigations on one canvas. Anything the user added by hand is
+   carried over, because they did not ask for it to be thrown away. */
+function adoptRunGraph(g){
+  if(!g||!g.nodes||!g.nodes.length) return;
+  const p=curProj();
+  const mine=p.nodes.filter(n=>n.origin==="user");
+  const mineIds=new Set(mine.map(n=>n.id));
+  const keptEdges=p.edges.filter(e=>mineIds.has(e.from)&&mineIds.has(e.to));
+  p.nodes=g.nodes.map(n=>Object.assign(
+    P(n.id,n.type,n.title,n.summary||"",n.status||"done",0,0,n.meta||{}),{origin:"run"}));
+  p.edges=g.edges.slice();
+  p.nodes.push(...mine); p.edges.push(...keptEdges);
+  p.primaryExp=null;
+  p.resultNode=null;
+  relayout(); savePersist();
+  toast(`Graph rebuilt from the run — ${g.nodes.length} nodes`);
+}
+
 function adoptRunData(data){
   if(!data||!data.charts) return;
   CHART_DATA.live=data.charts;
@@ -2443,11 +2463,9 @@ $("#shareBtn").addEventListener("click",()=>{
   toast("Exported project JSON");
 });
 
-/* The wordmark goes home: clear what is open and frame the whole graph. */
+/* The wordmark opens the source. */
 $("#brand").addEventListener("click",()=>{
-  closeMenus(); closeModal();
-  if(state.selection) clearSelection();
-  fit(true);
+  window.open("https://github.com/exalteddd/relay","_blank","noopener");
 });
 
 /* ============================== settings =============================== */
@@ -2574,11 +2592,56 @@ function openAccountMenu(anchor){
 }
 
 /* =============================== run flow ============================= */
-$("#runBtn").addEventListener("click",()=>{
+$("#runBtn").addEventListener("click",async()=>{
   const sel=state.selection?nodeById(state.selection):null;
-  const expId = (sel&&sel.type==="experiment")?sel.id:curProj().primaryExp;
-  openRunModal(expId);
+  // Selecting an experiment is an explicit ask for that experiment.
+  if(sel&&sel.type==="experiment"){ openRunModal(sel.id); return; }
+  // Otherwise the question decides, not whether an experiment happens to
+  // exist: a project can hold a compound screen and still be asked something
+  // the screen cannot answer.
+  const q=(questionNode()||{}).meta?.objective||state.question||"";
+  let mode="literature", why="";
+  try{
+    const r=await api("/api/resolve?q="+encodeURIComponent(q));
+    if(r.ok){ const j=await r.json(); mode=j.mode; why=j.why||""; }
+  }catch(e){}
+  const expId=curProj().primaryExp;
+  if(mode==="screen"&&expId&&nodeById(expId)) openRunModal(expId);
+  else openResearchModal(why);
 });
+
+/* Approval for a question with no experiment behind it: the run reviews the
+   literature. Says what it will and will not do before spending anything. */
+function openResearchModal(why){
+  const q=(questionNode()||{}).meta?.objective||state.question||"";
+  if(!q){ toast("Set this project's question first"); return; }
+  modal(`
+    <div class="modal-head"><div><h2>Run a literature review</h2>
+      <p>${esc(why||"No registered experiment matches this question")}, so the lab will research it rather than execute anything.</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="field"><label class="flab">Question</label><div class="fval">${esc(q)}</div></div>
+      <div class="review-grid">
+        <div><label class="flab">Sources</label><div class="fval">OpenAlex, Semantic Scholar, arXiv, Europe PMC</div></div>
+        <div><label class="flab">Produces</label><div class="fval">Grounded claims, hypotheses, a critique</div></div>
+        <div><label class="flab">Takes</label><div class="fval">A few minutes</div></div>
+        <div><label class="flab">Costs</label><div class="fval">Roughly 4 cents of model usage</div></div>
+      </div>
+      <div class="approve" id="approveBox" role="checkbox" aria-checked="false" tabindex="0">
+        <span class="box">${IC.check}</span>
+        <span class="atext"><b>I approve this run.</b> Every claim is checked against its source abstract and dropped if the quote is not there. Hypotheses are generated and unvalidated.</span>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="runGo" disabled>${IC.play}<span>Approve &amp; run</span></button></div>
+  `,root=>{
+    let ok=false; const box=$("#approveBox",root), go=$("#runGo",root);
+    const tog=()=>{ ok=!ok; box.classList.toggle("checked",ok); box.setAttribute("aria-checked",String(ok)); go.disabled=!ok; };
+    box.addEventListener("click",tog);
+    box.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="Enter"){e.preventDefault();tog();} });
+    go.addEventListener("click",()=>{ closeModal(); startRun(null); });
+  });
+}
 function openRunModal(expId){
   const exp=nodeById(expId)||nodeById(curProj().primaryExp);
   if(!exp){ startRun(expId); return; }
@@ -2615,7 +2678,8 @@ function openRunModal(expId){
 }
 async function startRun(expId){
   if(state.run.active) return;
-  const exp=nodeById(expId); if(!exp) return;
+  const exp=expId?nodeById(expId):null;
+  if(expId&&!exp) return;
   // reset downstream
   state.run.active=true; state.run.log=[]; state.run.id++;
   const runId="r-"+String(state.run.id).padStart(2,"0");
@@ -2624,7 +2688,7 @@ async function startRun(expId){
   updateProvenance();
   el.runbar.hidden=false; $("#runTxt").textContent=live?"Live Omnigent run":"Replaying trace";
   $("#runSub").textContent="· "+runId;
-  setStatus(expId,"running");
+  if(expId) setStatus(expId,"running");
   // open the result node's Activity tab so events stream where the user can watch
   const resId=curProj().resultNode;
   if(resId){ selectNode(resId); const rn=nodeById(resId); rn._tab="activity"; renderPaneBody(rn); }
@@ -2748,9 +2812,14 @@ function finishRun(expId,runId,aborted){
   el.runbar.hidden=true;
   // A run that never started must not be reported as a completed one.
   if(aborted) return;
+  if(state.run.plan&&state.run.plan.mode==="literature"){
+    toast(`${runId} complete — literature review`);
+    if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
+    return;
+  }
   const resId=curProj().resultNode;
   if(resId){ setStatus(resId,"done"); togglePreview(resId,true); pulse(resId); }
-  setStatus(expId,"done");
+  if(expId) setStatus(expId,"done");
   const nextN=curProj().nodes.find(n=>n.type==="next"); if(nextN) setStatus(nextN.id,"planned");
   toast(`${runId} complete — ${state.run.mode==="live"?"live Omnigent run":"replayed trace"}`);
   // if result pane open, refresh to show fresh charts/provenance
@@ -2811,7 +2880,7 @@ async function runViaBackend(expId,runId){
         return runViaBackend(expId,runId);          // try again for the slot
       }
       logEvent({agent:"Relay",msg:"Gave up waiting for the server",st:"failed"});
-      setStatus(expId,"planned"); finishRun(expId,runId,true); toast("Server stayed busy");
+      if(expId) setStatus(expId,"planned"); finishRun(expId,runId,true); toast("Server stayed busy");
       return;
     }
     // A refused run is not a dropped stream: say why instead of quietly replaying.
@@ -2819,7 +2888,7 @@ async function runViaBackend(expId,runId){
       const j=await res.json().catch(()=>({}));
       const why=j.error||"Not authorised to start a run";
       logEvent({agent:"Relay",msg:why,st:"failed"});
-      setStatus(expId,"planned"); finishRun(expId,runId,true);
+      if(expId) setStatus(expId,"planned"); finishRun(expId,runId,true);
       toast(why); refreshAuth();
       return;
     }
@@ -2839,7 +2908,24 @@ async function runViaBackend(expId,runId){
 }
 function applyBackendEvent(ev,expId,runId){
   if(ev.type==="status"&&ev.node) setStatus(ev.node,ev.status);
-  else if(ev.type==="act") logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
+  else if(ev.type==="act"){
+    logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
+    // A literature run has no result node, so the activity log has nowhere to
+    // show. Put the latest stage in the run bar so it is not a blank wait.
+    const sub=$("#runSub");
+    if(sub) sub.textContent="· "+(ev.agent?ev.agent+": ":"")+(ev.msg||"").slice(0,70);
+  }
+  // A research run returns a graph rather than a chart: claims, the
+  // hypotheses drawn from them, and the gap worth going after next.
+  else if(ev.type==="plan"){
+    const p=ev.data||{};
+    logEvent({agent:"Relay",
+      msg:p.mode==="literature"
+        ? `Literature review — ${p.why}`
+        : `Compound screen — ${p.why}`, st:"done"});
+    state.run.plan=p;
+  }
+  else if(ev.type==="graph"){ adoptRunGraph(ev.data); }
   else if(ev.type==="result"){
     // Adopt this run's own charts, tables and shortlist. Until a run happens
     // the canvas shows the bundled sample; from here it shows what was measured.
@@ -2849,7 +2935,7 @@ function applyBackendEvent(ev,expId,runId){
   // A server-side failure is reported as itself, not hidden behind a replay.
   else if(ev.type==="error"){
     logEvent({agent:"Relay",msg:ev.msg||"Run failed on the server",st:"failed"});
-    setStatus(expId,"failed"); state.run.failed=true;
+    if(expId) setStatus(expId,"failed"); state.run.failed=true;
     finishRun(expId,runId,true); toast(ev.msg||"Run failed");
   }
   else if(ev.type==="done"){ finishRun(expId,runId); }

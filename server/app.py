@@ -35,6 +35,7 @@ import requests
 from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory, session
 
 from server.pipeline_runner import DEFAULT_QUESTION, engine_available, run_events
+from server.research_runner import research_events, resolve_mode
 
 # Load .env for local development. Real environments (Render) set these in the
 # process environment, which already-set values take precedence over.
@@ -333,6 +334,18 @@ def refine_question():
     )
 
 
+@app.get("/api/resolve")
+def resolve():
+    """Which engine would answer this question. One source of truth for the
+    decision, so the interface does not keep a second copy of the rules."""
+    q = (request.args.get("q") or "").strip()[:500]
+    plan = resolve_mode(q)
+    if plan["mode"] == "screen" and not engine_available():
+        plan = {"mode": "literature", "experiment": None,
+                "why": "the screening engine is not installed on this server"}
+    return jsonify(plan)
+
+
 # --- runs ---------------------------------------------------------------
 @app.post("/api/run")
 def run():
@@ -365,9 +378,26 @@ def run():
         ), 429
     _run_holder.update(user=user or "local", started=time.time())
 
+    # Which engine can answer this. Literature reasoning works for any
+    # question; the compound screen only for the one thing it does.
+    plan = resolve_mode(question)
+    if body.get("mode") in ("screen", "literature"):
+        plan = {**plan, "mode": body["mode"]}        # an explicit choice wins
+
     def stream():
         try:
-            for event in run_events(question=question, aid=aid):
+            yield "data: " + json.dumps({"type": "plan", "data": plan}) + "\n\n"
+            if plan["mode"] == "literature":
+                from brain.config import load_config
+                cfg = load_config()
+                if cfg.provider == "openai" and not cfg.openai_api_key:
+                    yield "data: " + json.dumps({"type": "error",
+                        "msg": "No model key on this server. Set OPENAI_API_KEY and redeploy."}) + "\n\n"
+                    return
+                events = research_events(question, cfg)
+            else:
+                events = run_events(question=question, aid=aid)
+            for event in events:
                 yield "data: " + json.dumps(event) + "\n\n"
         except GeneratorExit:  # client navigated away
             raise
