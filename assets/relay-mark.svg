@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" role="img" aria-label="Relay">
+  <path d="M11 20 L27.5 11" stroke="#15233f" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M11 20 L19 30.5" stroke="#15233f" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="27.5" cy="11" r="5.2" fill="#2f66ff"/>
+  <circle cx="19" cy="30.5" r="5.2" fill="#15233f"/>
+  <circle cx="11" cy="20" r="5.6" fill="#2f66ff"/>
+</svg>
