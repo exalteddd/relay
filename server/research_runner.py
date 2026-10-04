@@ -137,6 +137,38 @@ def build_graph(proj_dir: Path, question: str) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+def _question_node(question, emap=None, papers=0):
+    return {"id": "rq", "type": "question", "title": "Research question",
+            "summary": question, "status": "done",
+            "meta": {"objective": question,
+                     "outcome": _safe(emap or {}, "summary", default="") or "",
+                     "data": f"{papers} papers kept from the literature sweep" if papers else ""}}
+
+
+def _evidence_node(claims):
+    return {"id": "ev", "type": "source", "title": "Evidence", "status": "done", "summary": "",
+            "meta": {"sources": [{"src": f"{c.get('ref','?')} ({c.get('year','n.d.')})",
+                                  "meta": c.get("strength", ""),
+                                  "body": c.get("claim", ""), "url": ""} for c in claims[:24]],
+                     "relevance": f"{len(claims)} claims extracted and quote-checked against their abstracts.",
+                     "limitations": "Claims whose quote was not verbatim in the abstract were rejected before this point."}}
+
+
+def _hypothesis_node(h):
+    review = h.get("review") or {}
+    rejected = h.get("status") == "rejected"
+    return {"id": h.get("id") or f"h{id(h)}", "type": "hypothesis",
+            "title": (h.get("statement") or "Hypothesis")[:46],
+            "summary": (h.get("statement") or "")[:88],
+            "status": "failed" if rejected else "done",
+            "meta": {"statement": h.get("statement", ""),
+                     "predictions": [h["prediction"]] if h.get("prediction") else [],
+                     "uncertainty": f"Reviewer confidence {h.get('confidence','?')}"
+                                    + (f" — {review.get('verdict')}" if review.get("verdict") else ""),
+                     "alt": "; ".join(review.get("issues", [])[:2]),
+                     "contradict": review.get("issues", [])[:3]}}, rejected
+
+
 def research_events(question: str, cfg):
     """Run the pipeline on a thread and yield UI events as stages complete.
 
@@ -169,13 +201,56 @@ def research_events(question: str, cfg):
     yield {"type": "act", "agent": "Relay", "msg": f"Researching: {question[:90]}", "st": "done"}
     yield {"type": "status", "node": "exp", "status": "running"}
 
+    # The graph is built as the run goes, not assembled at the end. A stage
+    # that takes a minute should leave something on the canvas behind it,
+    # otherwise the whole run looks like a frozen progress bar.
+    import json as _json
+    proj_dir = None
+    sent = set()
+
+    def read(rel, fallback):
+        try:
+            return _json.loads((proj_dir / rel).read_text())
+        except Exception:
+            return fallback
+
     while True:
         item = q.get()
         if item[0] == "done":
             break
         _, agent, msg = item
-        label = AGENT_LABEL.get(agent, agent)
-        yield {"type": "act", "agent": label, "msg": msg, "st": "done"}
+        yield {"type": "act", "agent": AGENT_LABEL.get(agent, agent), "msg": msg, "st": "done"}
+
+        # The first event names the project, which is how we find its folder.
+        if agent == "memory-agent" and proj_dir is None:
+            slug = msg.split(":", 1)[0].strip()
+            cand = Path(cfg.projects_dir) / slug
+            if cand.exists():
+                proj_dir = cand
+                yield {"type": "graph", "replace": True,
+                       "data": {"nodes": [_question_node(question)], "edges": []}}
+                sent.add("rq")
+
+        elif agent == "extraction-agent" and proj_dir and "ev" not in sent:
+            claims = read("literature/claims.json", [])
+            if claims:
+                yield {"type": "graph", "data": {"nodes": [_evidence_node(claims)],
+                                                 "edges": [{"from": "rq", "to": "ev", "rel": "uses"}]}}
+                sent.add("ev")
+
+        elif agent in ("hypothesis-agent", "critic-agent") and proj_dir:
+            hyps = read("hypotheses/hypotheses.json", [])
+            nodes, edges = [], []
+            for h in hyps[:6]:
+                node, rejected = _hypothesis_node(h)
+                if node["id"] in sent:
+                    continue
+                nodes.append(node); sent.add(node["id"])
+                if "ev" in sent:
+                    edges.append({"from": "ev", "to": node["id"],
+                                  "rel": "contradicts" if rejected else "supports"})
+            if nodes:
+                yield {"type": "graph", "data": {"nodes": nodes, "edges": edges}}
 
     t.join(timeout=5)
 
@@ -184,7 +259,7 @@ def research_events(question: str, cfg):
         yield {"type": "error", "msg": result["error"]}
         return
 
-    proj_dir = result.get("dir")
+    proj_dir = result.get("dir") or proj_dir
     if proj_dir is None or not proj_dir.exists():
         yield {"type": "error", "msg": "The run finished but its project folder could not be located."}
         return
@@ -197,7 +272,9 @@ def research_events(question: str, cfg):
         pass
 
     yield {"type": "status", "node": "exp", "status": "done"}
-    yield {"type": "graph", "data": graph}
+    # One reconciling pass: the critic may have changed verdicts after the
+    # nodes went out, and the next-question node comes from the evidence map.
+    yield {"type": "graph", "replace": True, "data": graph}
     yield {"type": "done", "label": "research", "data": {
         "mode": "literature",
         "papers": run.get("papers_used"),

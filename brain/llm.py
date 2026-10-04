@@ -167,6 +167,10 @@ class MockLLM:
         return {"refined": q.rstrip("?") + " (mock refinement)?", "too_broad": False,
                 "changes": ["mock: named the outcome"], "missing": []}
 
+    def ask(self, ctx):
+        return {"answer": f"Mock answer about {ctx.get('question','')[:60]}.",
+                "confidence": "low", "caveat": "mock response"}
+
     def plan(self, ctx):
         q = ctx["question"]
         t = self._terms(q)
