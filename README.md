@@ -43,7 +43,7 @@ Measured on the bundled fixture:
 |---|---|
 | ROC-AUC (held out, scaffold split) | **0.75** |
 | Enrichment @ top 1% | **11.3×** |
-| Enrichment @ top 5% | 7.2× |
+| Enrichment @ top 5% | 7.3× |
 | Control — random ranking | 1.05× (≈ no gain) |
 | Control — y-scramble | AUC 0.52 (≈ chance) |
 
