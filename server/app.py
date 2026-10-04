@@ -484,6 +484,11 @@ def run():
 # --- static frontend ----------------------------------------------------
 @app.get("/")
 def index():
+    return send_from_directory(ROOT, "landing.html")
+
+
+@app.get("/workspace")
+def workspace():
     return send_from_directory(ROOT, "index.html")
 
 
