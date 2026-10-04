@@ -237,6 +237,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 }
 .editing .node:hover .port,.editing .node.selected .port{opacity:1;transform:scale(1)}
 .port:hover{background:var(--accent)}
+.node.context-target{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-ring)}
 .node.link-target{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-ring),var(--shadow-md)}
 .edge-ghost{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;opacity:.9}
 .pill-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -1874,11 +1875,13 @@ function valuesFor(n){
   return {title:m.text||n.title};
 }
 
-function openNodeForm(type,prefill,editingId){
+function openNodeForm(type,prefill,editingId,parentId){
   const spec=NODE_FORM[type]; if(!spec) return;
   const editing=editingId?nodeById(editingId):null;
   if(editing) prefill=valuesFor(editing);
-  const parent=state.selection?nodeById(state.selection):null;
+  // An explicit parent (from a node's menu) wins over whatever is selected.
+  const parentKey=parentId||state.selection;
+  const parent=parentKey?nodeById(parentKey):null;
   const rows=spec.fields.map(f=>{
     const val=esc((prefill&&prefill[f.k])||"");
     const input=f.opts
@@ -1907,15 +1910,16 @@ function openNodeForm(type,prefill,editingId){
         e.textContent=(missing.length===1?"Still needed: ":"Still needed: ")+missing.join(", ");
         e.hidden=false; return;
       }
-      closeModal(); editing ? applyNodeEdit(editing,v) : createNode(type,v);
+      closeModal(); editing ? applyNodeEdit(editing,v) : createNode(type,v,parentKey);
     };
     root.querySelector("#nodeGo").addEventListener("click",submit);
     root.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) submit(); });
   });
 }
 
-function createNode(type,v){
+function createNode(type,v,parentId){
   const p=curProj(); const spec=NODE_FORM[type];
+  const parentKey=parentId||state.selection;
   const id=type[0]+"-"+Math.random().toString(36).slice(2,6);
   const title=v.title.length>46?v.title.slice(0,44)+"…":v.title;
   const summary={question:v.objective,source:v.body,hypothesis:v.statement,
@@ -1924,7 +1928,7 @@ function createNode(type,v){
             type==="experiment"?"planned":"done",0,0,metaFor(type,v));
   n.origin="user";                       // distinguishes it from generated nodes
   p.nodes.push(n);
-  if(state.selection) p.edges.push({from:state.selection,to:id,rel:spec.rel});
+  if(parentKey&&nodeById(parentKey)) p.edges.push({from:parentKey,to:id,rel:spec.rel});
   relayout();                            // position is derived, never typed in
   selectNode(id); savePersist();
   toast(`${spec.label} added`);
@@ -1940,7 +1944,9 @@ function applyNodeEdit(n,v){
   n.summary=summary.length>90?summary.slice(0,88)+"…":summary;
   n.meta=Object.assign({},n.meta,metaFor(n.type,v));
   n.edited=true;
-  renderGraph(); selectNode(n.id); savePersist();
+  renderGraph();
+  if(state.selection===n.id){ renderPaneHeader(n); renderPaneBody(n); }
+  savePersist();
   toast("Changes saved");
 }
 
@@ -2027,7 +2033,9 @@ function edgeContextMenu(ev,edge){
    them. The destructive one is last and marked. */
 function nodeContextMenu(ev,n){
   ev.preventDefault(); ev.stopPropagation();
-  selectNode(n.id);
+  // Deliberately does not select: a right-click asks for actions, not for the
+  // detail pane. The target is outlined instead so the menu has a visible
+  // owner — applied after opening, since opening clears any previous outline.
   const kids=Object.entries(NODE_FORM).map(([t,s])=>
     `<button class="mi" data-conn="${t}"><span>${esc(s.label)}</span></button>`).join("");
   openMenuAt(ev.clientX,ev.clientY,`
@@ -2047,9 +2055,10 @@ function nodeContextMenu(ev,n){
       else if(a==="delete") deleteNode(n.id);
     }));
     $$("[data-conn]",m).forEach(b=>b.addEventListener("click",()=>{
-      closeMenus(); selectNode(n.id); openNodeForm(b.dataset.conn);
+      closeMenus(); openNodeForm(b.dataset.conn,null,null,n.id);
     }));
   });
+  if(nodeEls[n.id]) nodeEls[n.id].classList.add("context-target");
 }
 
 /* Right-click on empty canvas: add something, or re-space the graph. */
@@ -2096,7 +2105,11 @@ function deleteNode(id){
 function relayout(){ layoutGraph(curProj()); renderGraph(); requestAnimationFrame(()=>fit(true)); }
 
 /* =============================== menus =============================== */
-function closeMenus(){ $$(".menu").forEach(m=>m.remove()); document.removeEventListener("pointerdown",menuOutside,true); }
+function closeMenus(){
+  $$(".menu").forEach(m=>m.remove());
+  $$(".node.context-target").forEach(d=>d.classList.remove("context-target"));
+  document.removeEventListener("pointerdown",menuOutside,true);
+}
 function menuOutside(e){ if(!e.target.closest(".menu")&&!e.target.closest("[aria-haspopup]")) closeMenus(); }
 /* Same menu, placed at a point instead of under an element — for right-click. */
 /* Place a menu without letting it paint in the wrong spot first.
