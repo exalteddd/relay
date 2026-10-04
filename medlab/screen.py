@@ -131,9 +131,18 @@ def run_screen(records: list[dict], seed: int = 0, n_estimators: int = 300,
     auc_scr = float(roc_auc_score(y_test, scores_scr)) if len(set(y_test)) > 1 else float("nan")
 
     order = np.argsort(-scores)
+    # Spread of the ensemble's own votes on each shortlisted compound — a real
+    # measure of how much the forest disagrees with itself, not a placeholder.
+    try:
+        top_idx = order[:10]
+        per_tree = np.array([t.predict_proba(X[test][top_idx])[:, 1] for t in clf.estimators_])
+        top_std = per_tree.std(axis=0)
+    except Exception:
+        top_std = np.zeros(len(order[:10]))
     top_hits = [{"cid": recs[test[i]]["cid"], "smiles": recs[test[i]]["smiles"],
-                 "score": round(float(scores[i]), 3), "label": int(y_test[i])}
-                for i in order[:10]]
+                 "score": round(float(scores[i]), 3), "label": int(y_test[i]),
+                 "score_std": round(float(top_std[rank]), 3)}
+                for rank, i in enumerate(order[:10])]
     if dump_ranked_path:
         import json as _json
         ranked = [{"s": round(float(scores[i]), 3), "y": int(y_test[i])} for i in order]
