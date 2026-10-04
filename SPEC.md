@@ -299,7 +299,9 @@ only then describe the system as Omnigent-orchestrated.
 - [ ] Provenance labelling verified: measured, literature-grounded and
       agent-generated are visibly distinct
 - [ ] A signed-out visitor sees the worked example and understands it is one
-- [ ] Exactly one public URL; the static showcase is retired or clearly marked
+- [x] Exactly one public URL; the static GitHub Pages copy was retired on
+      2026-10-04, since without sample data it was an interface that could
+      not run anything
 
 ### Risks
 
