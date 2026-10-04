@@ -535,8 +535,8 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
 .approve .atext b{font-weight:700}
 
 /* menu (dropdown) */
-@keyframes menupop{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
-.menu{position:absolute;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;transform-origin:top left;animation:menupop .12s cubic-bezier(.2,.8,.3,1)}
+@keyframes menupop{from{opacity:0}to{opacity:1}}
+.menu{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;transform-origin:top left;animation:menupop .12s cubic-bezier(.2,.8,.3,1)}
 @media (prefers-reduced-motion:reduce){.menu{animation:none}}
 .menu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:8px;border:0;background:transparent;font-size:13px;font-weight:600;color:var(--ink);text-align:left}
 .menu .mi:hover{background:var(--surface-2)}
@@ -1031,12 +1031,14 @@ function savePersist(){
           for(const e of state.projects[pid].edges){ if(!baseEdgeKeys.has(e.from+">"+e.to)) (extraEdges[pid]=extraEdges[pid]||[]).push(e); }
         }
       }
-      localStorage.setItem(LSK,JSON.stringify({
+      const payload={
         dataMode:state.dataMode,theme:state.theme,project:state.project,editing:state.editing,
         userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
         deletedProjects:state.deletedProjects||[],
         view:state.view,previews:state.previews,pos,extraNodes,extraEdges
-      }));
+      };
+      localStorage.setItem(LSK,JSON.stringify(payload));
+      syncUp(payload);
     }catch(e){/* storage may be unavailable; ignore */}
   },260);
 }
@@ -2097,29 +2099,49 @@ function relayout(){ layoutGraph(curProj()); renderGraph(); requestAnimationFram
 function closeMenus(){ $$(".menu").forEach(m=>m.remove()); document.removeEventListener("pointerdown",menuOutside,true); }
 function menuOutside(e){ if(!e.target.closest(".menu")&&!e.target.closest("[aria-haspopup]")) closeMenus(); }
 /* Same menu, placed at a point instead of under an element — for right-click. */
-function openMenuAt(x,y,html,onwire){
-  closeMenus();
-  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html;
+/* Place a menu without letting it paint in the wrong spot first.
+   Appending an absolutely-positioned element with no coordinates renders it
+   at its static position — near the top of the page — and only the following
+   style writes move it to the pointer. That is the jump: it appears high and
+   snaps down. Measuring while hidden, then revealing, means it only ever
+   paints where it belongs. */
+function placeMenu(m,x,y,flipFrom){
+  m.style.visibility="hidden";
+  m.style.left="0px"; m.style.top="0px";
   document.body.appendChild(m);
+  const w=m.offsetWidth, h=m.offsetHeight;
   let left=x, top=y;
-  if(left+m.offsetWidth>innerWidth-10) left=x-m.offsetWidth;
-  if(top+m.offsetHeight>innerHeight-10) top=y-m.offsetHeight;
-  m.style.left=Math.max(10,left)+"px"; m.style.top=Math.max(10,top)+"px";
-  if(onwire)onwire(m);
-  setTimeout(()=>document.addEventListener("pointerdown",menuOutside,true),0);
+  if(left+w>innerWidth-10)  left=(flipFrom!=null?innerWidth-w-10:x-w);
+  if(top+h>innerHeight-10)  top=(flipFrom!=null?flipFrom-h-6:y-h);
+  m.style.left=Math.max(10,left)+"px";
+  m.style.top=Math.max(10,Math.min(top,innerHeight-h-10))+"px";
+  m.style.visibility="";
   return m;
 }
+function buildMenu(html){
+  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html; return m;
+}
+function armMenuDismiss(){
+  setTimeout(()=>document.addEventListener("pointerdown",menuOutside,true),0);
+}
+
+/* Menu at a point — for right-click. */
+function openMenuAt(x,y,html,onwire){
+  closeMenus();
+  const m=placeMenu(buildMenu(html),x,y);
+  if(onwire)onwire(m);
+  armMenuDismiss();
+  return m;
+}
+
+/* Menu under an element — for toolbar buttons. */
 function openMenu(anchor,html,onwire){
   closeMenus();
-  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html;
-  document.body.appendChild(m);
   const r=anchor.getBoundingClientRect();
-  let top=r.bottom+6, left=r.left;
-  if(left+m.offsetWidth>innerWidth-10) left=innerWidth-m.offsetWidth-10;
-  if(top+m.offsetHeight>innerHeight-10) top=r.top-m.offsetHeight-6;
-  m.style.top=Math.max(10,top)+"px"; m.style.left=Math.max(10,left)+"px";
+  const m=placeMenu(buildMenu(html),r.left,r.bottom+6,r.top);
   if(onwire)onwire(m);
-  setTimeout(()=>document.addEventListener("pointerdown",menuOutside,true),0);
+  armMenuDismiss();
+  return m;
 }
 $("#crumb").addEventListener("click",()=>{
   const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]}</svg><span>${esc(p.name)}</span><span class="mi-sub" style="margin-left:auto">${esc(p.run)}</span></button>`;}).join("");
@@ -2304,6 +2326,7 @@ function openSettings(){
         <dt>Signed in as</dt><dd>${esc(AUTH.user||(AUTH.devOpen?"local development":"not signed in"))}</dd>
         <dt>Can start runs</dt><dd>${AUTH.mayRun?"yes":"no"}</dd>
         <dt>Server</dt><dd>${AUTH.reachable?(AUTH.engine?"engine available":"no engine"):"static — runs replay a trace"}</dd>
+        <dt>Graphs saved</dt><dd>${AUTH.user?"to your account — they follow you to another browser":"in this browser only"}</dd>
       </dl></div>
       <div class="section"><h3>Keyboard</h3><dl class="kv">
         <dt>F</dt><dd>Fit the graph to the screen</dd>
@@ -2313,7 +2336,9 @@ function openSettings(){
         <dt>Esc</dt><dd>Close the pane or menu</dd>
       </dl></div>
       <div class="section"><h3>Local data</h3>
-        <div class="prose"><p>Your graphs, added nodes and layout live in this browser only — they are not on the server and not shared with anyone else.</p></div>
+        <div class="prose"><p>${AUTH.user
+            ? "Signed in, so your graphs are saved to your account and load on any browser you sign in from. They are visible only to you."
+            : "Not signed in, so your graphs live in this browser only. Sign in and they move to your account."}</p></div>
         ${actionRow([{id:"wipe",label:"Reset this browser's data"}])}
       </div>
     </div>
@@ -2342,7 +2367,7 @@ function openAccountMenu(anchor){
       ? `<button class="mi" data-am="profile"><span>Open GitHub profile</span></button>
          <button class="mi" data-am="signout"><span>Sign out</span></button>`
       : AUTH.devOpen
-        ? `<div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Running locally with no OAuth app configured, so sign-in is not needed here.</div>`
+        ? `<div style="padding:4px 10px 10px;font-size:12px;color:var(--ink-2);line-height:1.5">No GitHub app is configured on this server, so there is nothing to sign in to and runs are open.<br><br>To try sign-in locally, register an OAuth app with callback <code>${esc(location.origin)}/auth/callback</code> and put its id and secret in <code>.env</code>.</div>`
         : AUTH.reachable
           ? `<button class="mi" data-am="signin"><span>Sign in with GitHub</span></button>
              <button class="mi" data-am="signup"><span>Create a GitHub account</span></button>`
@@ -2426,6 +2451,38 @@ const AUTH={user:null,mayRun:false,configured:false,reachable:false};
 function api(path,opts){
   return fetch((CFG.backendUrl||"")+path,Object.assign({credentials:"include"},opts||{}));
 }
+/* When signed in, this browser is a view onto the account rather than the
+   only copy. Saves go up as well as to localStorage; a fresh browser signing
+   in pulls the account's graphs down. */
+let syncT=null, syncReady=false;
+function syncUp(payload){
+  if(!AUTH.user||!syncReady) return;
+  clearTimeout(syncT);
+  syncT=setTimeout(()=>{
+    api("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify(payload)}).catch(()=>{});
+  },900);
+}
+async function pullAccountState(){
+  if(!AUTH.user){ syncReady=false; return; }
+  try{
+    const r=await api("/api/state"); if(!r.ok) return;
+    const j=await r.json();
+    if(j.state){
+      // The account has a saved copy: adopt it over whatever this browser had.
+      localStorage.setItem(LSK,JSON.stringify(j.state));
+      syncReady=true;
+      loadPersist(); renderProjects(); renderCrumb(); renderGraph(); applyTheme();
+      if(state.view[state.project]) applyTransform(false); else fit(false);
+      toast("Loaded your saved graphs");
+    } else {
+      // First sign-in on this account: keep what is here and push it up.
+      syncReady=true; savePersist();
+    }
+  }catch(e){ syncReady=false; }
+  renderAuth();
+}
+
 async function refreshAuth(){
   try{
     const r=await api("/api/me");
@@ -2436,6 +2493,7 @@ async function refreshAuth(){
     try{ const c=await api("/api/config"); if(c.ok){ const cj=await c.json(); AUTH.configured=!!cj.authConfigured; AUTH.engine=!!cj.engine; } }catch(e){}
   }catch(e){ AUTH.reachable=false; AUTH.user=null; AUTH.mayRun=false; }
   renderAuth();
+  await pullAccountState();
 }
 function renderAuth(){
   const av=$("#authAvatar"), nm=$("#authName"), row=$("#authRow");

@@ -27,3 +27,6 @@ medlab/relay_data/ranked.json
 # Ignore all local environment variants, keeping the example template.
 .env.*
 !.env.example
+
+# Per-user saved graphs
+user_state/

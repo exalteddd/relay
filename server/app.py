@@ -46,6 +46,10 @@ except ImportError:  # optional: production does not need it
     pass
 
 ROOT = Path(__file__).resolve().parent.parent
+# Per-user saved graphs. A plain directory of JSON keyed by GitHub login:
+# no database to run, and the only reader is the user who owns the file.
+# Set RELAY_STATE_DIR to a mounted disk to make it survive a redeploy.
+STATE_DIR = Path(os.environ.get("RELAY_STATE_DIR", ROOT / "user_state"))
 GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
 GITHUB_USER = "https://api.github.com/user"
@@ -70,7 +74,8 @@ ALLOWED = {u.strip().lower() for u in os.environ.get("RELAY_ALLOWED_USERS", "").
 AUTH_CONFIGURED = bool(CLIENT_ID and CLIENT_SECRET)
 
 app.config.update(
-    MAX_CONTENT_LENGTH=16 * 1024,
+    # Large enough for a saved graph, small enough to stay a bound.
+    MAX_CONTENT_LENGTH=256 * 1024,
     SESSION_COOKIE_HTTPONLY=True,    # JS cannot read it, so XSS cannot steal it
     SESSION_COOKIE_SAMESITE="Lax",   # survives the OAuth redirect, blocks cross-site POSTs
     SESSION_COOKIE_SECURE=not IS_DEV,  # HTTPS-only off localhost
@@ -228,6 +233,63 @@ def config():
         engine=engine_available(),
         allowlistActive=bool(ALLOWED),
     )
+
+
+# --- per-user saved graphs ----------------------------------------------
+def _state_file(user: str) -> Path:
+    """One file per user. The name is derived, never taken from input."""
+    safe = "".join(c for c in user.lower() if c.isalnum() or c in "-_")[:40]
+    if not safe:
+        raise ValueError("unusable username")
+    return STATE_DIR / f"{safe}.json"
+
+
+@app.get("/api/state")
+def get_state():
+    """The signed-in user's saved graphs, or nothing if they have none yet."""
+    user = current_user()
+    if not user:
+        return jsonify(scope="local", state=None)
+    try:
+        f = _state_file(user)
+        if f.is_file():
+            return jsonify(scope="user", state=json.loads(f.read_text()))
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    return jsonify(scope="user", state=None)
+
+
+@app.put("/api/state")
+def put_state():
+    user = current_user()
+    if not user:
+        return jsonify(error="Sign in to save your work to this account"), 401
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error="Expected a JSON object"), 400
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        f = _state_file(user)
+        # Write then replace, so an interrupted save cannot truncate the file.
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(body))
+        tmp.replace(f)
+    except (OSError, ValueError) as exc:
+        app.logger.warning("state save failed: %s", exc)
+        return jsonify(error="Could not save"), 500
+    return jsonify(ok=True, scope="user")
+
+
+@app.delete("/api/state")
+def delete_state():
+    user = current_user()
+    if not user:
+        return jsonify(error="Not signed in"), 401
+    try:
+        _state_file(user).unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
+    return jsonify(ok=True)
 
 
 # --- runs ---------------------------------------------------------------
