@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
 from pathlib import Path
 
 import requests
@@ -72,6 +73,14 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",   # survives the OAuth redirect, blocks cross-site POSTs
     SESSION_COOKIE_SECURE=not IS_DEV,  # HTTPS-only off localhost
 )
+
+
+# One run at a time. A screen peaks around 380MB, so two at once exceed the
+# 512MB instance and the whole process is OOM-killed -- which would take the
+# bystander's run down too. Refusing the second is the kinder failure, and it
+# doubles as a cap on concurrent model spend.
+# This guards a single process; more than one worker would need shared state.
+_run_slot = threading.BoundedSemaphore(1)
 
 
 def current_user():
@@ -211,6 +220,10 @@ def run():
     except (TypeError, ValueError):
         return jsonify(error="aid must be an integer PubChem assay id"), 400
 
+    if not _run_slot.acquire(blocking=False):
+        return jsonify(error="Another run is in progress on this server. "
+                             "Runs are handled one at a time; try again in a moment."), 429
+
     def stream():
         try:
             for event in run_events(question=question, aid=aid):
@@ -219,6 +232,9 @@ def run():
             raise
         except Exception as exc:
             yield "data: " + json.dumps({"type": "error", "msg": f"{type(exc).__name__}: {exc}"}) + "\n\n"
+        finally:
+            # Released here, not in the view: the generator outlives the request.
+            _run_slot.release()
 
     return Response(
         stream(),

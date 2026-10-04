@@ -1847,11 +1847,13 @@ async function runViaBackend(expId,runId){
       body:JSON.stringify({project:curProj().id,experiment:expId,runId,dataMode:state.dataMode,
         question:state.question||curProj().question||""}),signal:ctl.signal});
     // A refused run is not a dropped stream: say why instead of quietly replaying.
-    if(res.status===401||res.status===403){
+    if(res.status===401||res.status===403||res.status===429){
       const j=await res.json().catch(()=>({}));
-      logEvent({agent:"Relay",msg:j.error||"Not authorised to start a run",st:"failed"});
+      const why=j.error||(res.status===429?"The server is busy with another run":"Not authorised to start a run");
+      logEvent({agent:"Relay",msg:why,st:"failed"});
       setStatus(expId,"planned"); finishRun(expId,runId,true);
-      toast(j.error||"Sign in to start a run"); refreshAuth();
+      toast(why);
+      if(res.status!==429) refreshAuth();
       return;
     }
     if(!res.ok||!res.body) throw new Error("no stream");

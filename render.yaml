@@ -6,12 +6,15 @@ services:
   - type: web
     name: relay
     runtime: python
-    plan: free
+    # Starter: 512MB, always on. A screen peaks near 380MB (measured), so one
+    # run fits and two do not -- the server allows one at a time and refuses
+    # the rest with a 429 rather than being OOM-killed.
+    plan: starter
     buildCommand: pip install -r requirements-server.txt && pip install -e .
-    # Threads (not extra workers) so the free tier's memory holds, while the
-    # SSE run stream and the health poll it races against can overlap.
-    # The timeout is generous because a real screen takes a while.
-    startCommand: gunicorn --threads 8 --timeout 300 --bind 0.0.0.0:$PORT server.app:app
+    # One worker, because the single-run guard is per-process. Threads let the
+    # health check and UI requests continue while a run streams. The timeout
+    # covers a full research run, which takes minutes rather than seconds.
+    startCommand: gunicorn --workers 1 --threads 8 --timeout 600 --bind 0.0.0.0:$PORT server.app:app
     healthCheckPath: /api/health
     envVars:
       - key: RELAY_ENV
