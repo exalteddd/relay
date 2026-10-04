@@ -150,8 +150,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .sidebar-foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:3px}
 .foot-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--ink-2);background:transparent;border:0;font-size:13px;font-weight:600;width:100%;text-align:left;transition:background .14s,color .14s}
 .foot-row:hover{background:var(--surface-2);color:var(--ink)}
-.foot-row svg{width:16px;height:16px;color:var(--ink-3)}
-.avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
+.foot-row>svg{width:22px;height:22px;padding:3px;box-sizing:border-box;color:var(--ink-3);flex:0 0 auto}
+.foot-row{gap:9px}
+.avatar{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
 
 /* --------------------------------- main --------------------------------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
@@ -572,6 +573,9 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
 .menu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:8px;border:0;background:transparent;font-size:13px;font-weight:600;color:var(--ink);text-align:left}
 .menu .mi:hover{background:var(--surface-2)}
 .menu .mi .mi-ico{width:16px;height:16px;color:var(--ink-3);flex:0 0 auto}
+.menu .mi-project{gap:10px}
+.menu .mi-project .mi-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .mi-project .mi-run{flex:0 0 auto;margin-left:14px;font-size:11.5px;font-weight:600;color:var(--ink-3)}
 .menu .mi[aria-current="true"]{color:var(--accent-strong)}
 .menu .mi[aria-current="true"] .mi-ico{color:var(--accent)}
 .menu .mi .mi-sub{font-size:11px;color:var(--ink-3);font-weight:500}
@@ -667,7 +671,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
         <span class="avatar" id="authAvatar">?</span>
         <span id="authName">Not signed in</span>
         <button class="cog-btn" id="settingsBtn" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+          <svg viewBox="-2 -2 28 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
         </button>
       </div>
     </div>
@@ -700,7 +704,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z"/></svg>
           <span class="btn-label">Run</span>
         </button>
-        <button class="icon-btn" id="shareBtn" title="Share" aria-label="Share" style="width:36px;height:36px">
+        <button class="icon-btn" id="shareBtn" title="Export this project" aria-label="Export this project" style="width:36px;height:36px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
         </button>
       </div>
@@ -1539,8 +1543,15 @@ function paneQuestion(n){const m=n.meta;return `
   ${sectionKV("Data & budget",{Data:m.data,Budget:m.budget})}
   ${actionRow([{id:"edit",label:"Edit"},{id:"add-evidence",label:"Add evidence",icon:IC.plus},{id:"propose",label:"Add hypothesis",primary:true}])}`;}
 function paneSource(n){const m=n.meta;const cards=(m.sources||[]).map(s=>`
-  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div>${s.url?`<div class="ec-link"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></div>`:""}</div>`).join("");
+  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span><span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div>${s.url?`<div class="ec-link"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></div>`:""}</div>`).join("");
+  // What this evidence actually bears on, taken from the edges leaving it.
+  const bearing=curProj().edges.filter(e=>e.from===n.id).map(e=>({node:nodeById(e.to),rel:e.rel})).filter(x=>x.node);
+  const bearingHTML=bearing.length
+    ? `<ul class="bullets">${bearing.map(({node,rel})=>
+        `<li class="${rel==="contradicts"?"neg":"pos"}"><button class="link-node" data-goto="${node.id}">${esc(nodeHeading(node).title)}</button><span class="rel-tag ${rel}">${esc(REL_LABEL[rel]||rel)}</span></li>`).join("")}</ul>`
+    : `<div class="prose"><p class="muted">Not connected to a hypothesis yet.</p></div>`;
   return `<div class="section"><h3>Sources & records</h3>${cards}</div>
+  <div class="section"><h3>Bearing on hypotheses</h3>${bearingHTML}</div>
   ${sectionKV("Appraisal",{Relevance:m.relevance,Limitations:m.limitations})}
   ${actionRow([{id:"edit",label:"Edit"},{id:"open-source",label:"Open source",icon:IC.link},{id:"link-claim",label:"Connect to a claim"}])}`;}
 /* Evidence shown here is read off the graph, not retyped beside it. A
@@ -1574,7 +1585,7 @@ function paneHypothesis(n){const m=n.meta;
   ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"link-claim",label:"Connect to a claim"},{id:"edit",label:"Edit"}])}`;}
 function paneExperiment(n){const m=n.meta;
   const tests=(m.tests||[]).map(t=>`<div class="evidence-card" style="${t.sel?"border-color:var(--accent);background:var(--accent-soft)":""}"><div class="ec-top"><span class="ec-src">${esc(t.name)}</span>${t.sel?`<span class="rel-tag supports">selected</span>`:""}</div><div class="ec-body">${esc(t.why)}</div></div>`).join("");
-  return `<div class="section"><h3>Proposed tests</h3>${tests}</div>
+  return `<div class="section"><h3>Proposed tests</h3><div class="prose"><p class="muted">What the planner considered for this question. The selected one is what a run executes.</p></div>${tests}</div>
   ${sectionKV("Method & inputs",{Method:m.method,Inputs:m.inputs,Baseline:m.baseline,Controls:m.controls,Parameters:m.params})}
   ${sectionKV("Cost & approval",{"Expected cost":m.cost,Approval:m.approval})}
   <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Runs act on real inputs and need approval. In a shared demo this replays a labelled trace; served from your Mac it orchestrates Omnigent.</span></div>
@@ -1609,7 +1620,7 @@ function paneResult(n){
     inner=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px">${measuredNote}</div>${candidateTable(d)}<div style="height:20px"></div>${enrichmentTable(d)}`;
   } else if(tab==="evidence"){
     const ev=nodeById(curProj().id==="ndm1"?"ev1":(curProj().id==="materials"?"mev":"sev"));
-    inner=(ev&&ev.meta.sources)?ev.meta.sources.map(s=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join(""):`<div class="callout"><span>No linked evidence on this result.</span></div>`;
+    inner=(ev&&ev.meta.sources)?ev.meta.sources.map(s=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span><span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join(""):`<div class="callout"><span>No linked evidence on this result.</span></div>`;
   } else {
     inner=activityHTML();
   }
@@ -1969,7 +1980,6 @@ const NODE_FORM={
   source:{label:"Evidence", rel:"uses", fields:[
     {k:"title",     l:"Source",                  req:true,  ph:"Metallo-β-lactamase inhibitor review"},
     {k:"body",      l:"What does it show?",      req:true,  area:true, ph:"Thiol-carboxylate chemotypes recur as validated binders."},
-    {k:"rel",       l:"Relation",                opts:["supports","contradicts"]},
     {k:"url",       l:"Link (optional)",         ph:"https://doi.org/..."},
     {k:"relevance", l:"Why it matters here",     ph:"Grounds the chelation prior"}]},
   hypothesis:{label:"Hypothesis", rel:"supports", fields:[
@@ -1996,7 +2006,7 @@ const NODE_FORM={
 /* Turn form values into the meta shape each pane renderer reads. */
 function metaFor(type,v){
   if(type==="question")   return {objective:v.objective,outcome:v.outcome,data:v.data};
-  if(type==="source")     return {sources:[{src:v.title,meta:"added by you",rel:v.rel||"supports",body:v.body,url:v.url||""}],relevance:v.relevance};
+  if(type==="source")     return {sources:[{src:v.title,meta:"added by you",body:v.body,url:v.url||""}],relevance:v.relevance};
   if(type==="hypothesis") return {statement:v.statement,predictions:v.prediction?[v.prediction]:[],uncertainty:v.uncertainty};
   if(type==="experiment") return {tests:[{name:v.title,sel:true,why:v.method}],method:v.method,inputs:v.inputs,controls:v.controls,approval:"Required before run."};
   if(type==="result")     return {interp:v.interp};
@@ -2009,7 +2019,7 @@ function metaFor(type,v){
 function valuesFor(n){
   const m=n.meta||{}, t=n.type;
   if(t==="question")   return {title:n.title,objective:m.objective,outcome:m.outcome,data:m.data};
-  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,rel:s0.rel,url:s0.url,relevance:m.relevance};}
+  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,url:s0.url,relevance:m.relevance};}
   if(t==="hypothesis") return {title:n.title,statement:m.statement,prediction:(m.predictions||[])[0],uncertainty:m.uncertainty};
   if(t==="experiment") return {title:n.title,method:m.method,inputs:m.inputs,controls:m.controls};
   if(t==="result")     return {title:n.title,interp:m.interp};
@@ -2286,7 +2296,7 @@ function openMenu(anchor,html,onwire){
   return m;
 }
 $("#crumb").addEventListener("click",()=>{
-  const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]}</svg><span>${esc(p.name)}</span><span class="mi-sub" style="margin-left:auto">${esc(p.run)}</span></button>`;}).join("");
+  const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi mi-project" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]||PROJECT_ICON.flask}</svg><span class="mi-name">${esc(p.name)}</span><span class="mi-run">${esc(p.run||"")}</span></button>`;}).join("");
   openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}`,m=>{ $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);})); });
 });
 $("#provenance").addEventListener("click",()=>{
@@ -2364,7 +2374,7 @@ function createProject(name,question){
 function openProjectForm(){
   modal(`
     <div class="modal-head"><div><h2>New project</h2>
-      <p>A project is one investigation. It starts from the question you want answered.</p></div>
+      </div>
       <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="modal-body"><div class="node-form">
       <div class="field"><label class="flab">Project name <span class="req">required</span></label>
@@ -2489,10 +2499,19 @@ function renameProject(id){
 
 $("#addProject").addEventListener("click",openProjectForm);
 
-/* Share copies the address rather than pretending to. */
-$("#shareBtn").addEventListener("click",async()=>{
-  try{ await navigator.clipboard.writeText(location.href); toast("Link copied"); }
-  catch(e){ toast(location.href); }
+/* Export the project itself — the graph, its question and its connections —
+   rather than a link that means nothing on anyone else's machine. */
+$("#shareBtn").addEventListener("click",()=>{
+  const p=curProj();
+  const payload={exported:new Date().toISOString(),project:{id:p.id,name:p.name,
+    question:(questionNode()||{}).meta?.objective||state.question||"",
+    nodes:p.nodes.map(n=>({id:n.id,type:n.type,title:n.title,summary:n.summary,
+      status:n.status,origin:n.origin||"generated",meta:n.meta})),
+    edges:p.edges}};
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
+  a.download=`${p.id}-project.json`; a.click(); URL.revokeObjectURL(a.href);
+  toast("Exported project JSON");
 });
 
 /* The wordmark goes home: clear what is open and frame the whole graph. */
@@ -2534,12 +2553,7 @@ function openSettings(){
             <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
             <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
           </select></div>
-        <div class="field"><label class="flab">Results shown</label>
-          <select data-s="dataMode">
-            <option value="verified"${state.dataMode==="verified"?" selected":""}>Verified sample</option>
-            <option value="illustrative"${state.dataMode==="illustrative"?" selected":""}>Illustrative placeholders</option>
-            ${CHART_DATA.live?`<option value="live"${state.dataMode==="live"?" selected":""}>This run (measured)</option>`:""}
-          </select></div>
+
       </div>
 
       <div class="section"><h3>Appearance</h3>
@@ -2582,7 +2596,6 @@ function openSettings(){
       state.theme=e.target.value||null; applyTheme(); renderEdges(); renderMinimap(); save();
     });
     sel("editing").addEventListener("change",e=>setEditing(e.target.value==="editing"));
-    sel("dataMode").addEventListener("change",e=>setDataMode(e.target.value));
     sel("question").addEventListener("input",e=>{ state.question=e.target.value.trim(); renderCmdCtx(); save(); });
     sel("autoTidy").addEventListener("change",e=>{ state.opts.autoTidy=e.target.value==="yes"; save(); });
     sel("aid").addEventListener("change",e=>{
@@ -2620,8 +2633,6 @@ function openAccountMenu(anchor){
           ? `<button class="mi" data-am="signin"><span>Sign in with GitHub</span></button>
              <button class="mi" data-am="signup"><span>Create a GitHub account</span></button>`
           : `<div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">No server on this host, so there is nothing to sign in to.</div>`}
-    <div class="m-sep"></div>
-    <button class="mi" data-am="settings"><span>Settings…</span></button>
   `,m=>{
     $$("[data-am]",m).forEach(b=>b.addEventListener("click",()=>{
       const a=b.dataset.am; closeMenus();
@@ -2629,7 +2640,6 @@ function openAccountMenu(anchor){
       else if(a==="signup") window.open("https://github.com/signup","_blank","noopener");
       else if(a==="profile") window.open("https://github.com/"+encodeURIComponent(AUTH.user),"_blank","noopener");
       else if(a==="signout") api("/auth/logout",{method:"POST"}).then(()=>{AUTH.user=null;AUTH.mayRun=false;renderAuth();toast("Signed out");});
-      else if(a==="settings") openSettings();
     }));
   });
 }
