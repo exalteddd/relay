@@ -902,7 +902,8 @@ function loadPersist(){
   let p=null;
   try{ p=JSON.parse(localStorage.getItem(LSK)||"null"); }catch(e){ p=null; }
   if(p){
-    if(p.dataMode) state.dataMode=p.dataMode;
+    // "live" belongs to a run that is over; a reload has no measured data to show.
+    if(p.dataMode) state.dataMode = (p.dataMode==="live"&&!CHART_DATA.live) ? "verified" : p.dataMode;
     if(p.theme) state.theme=p.theme;
     if(p.project && state.projects[p.project]) state.project=p.project;
     if(p.view) state.view=p.view;
@@ -1357,7 +1358,10 @@ function paneResult(n){
   const tabs=["plot","table","evidence","activity"];
   const tabLabels={plot:"Plot",table:"Table",evidence:"Evidence",activity:"Activity"};
   let inner="";
-  const measuredNote = d.measured
+  const isLive = state.dataMode==="live" && !!CHART_DATA.live;
+  const measuredNote = isLive
+    ? `<div class="illus-pill" title="Computed by this server from the run that just finished">● Measured · ${esc(d.tag||"this run")}</div>`
+    : d.measured
     ? `<div class="illus-pill" title="From the medlab pipeline on the synthetic fixture">● Sample data · verified on fixture</div>`
     : `<div class="illus-pill">○ Illustrative · not measured</div>`;
   if(tab==="plot"){
@@ -1509,7 +1513,7 @@ function buildPreview(n,ps){
   if(!ps.collapsed) wrap.style.height=ps.h+"px";
   const tab=ps.tab||"plot";
   const body = tab==="plot"
-    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">${d.measured?"Sample · verified":"Illustrative"}</span></div>${chartBlock("enrichment",d,false)}`
+    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">${(state.dataMode==="live"&&CHART_DATA.live)?"Measured · this run":d.measured?"Sample · verified":"Illustrative"}</span></div>${chartBlock("enrichment",d,false)}`
     : candidateTable(d);
   wrap.innerHTML=`
     <div class="preview-head">
@@ -1612,7 +1616,8 @@ $("#crumb").addEventListener("click",()=>{
 });
 $("#provenance").addEventListener("click",()=>{
   openMenu($("#provenance"),`
-    <div class="m-head">Data source (sample)</div>
+    <div class="m-head">Data source${CHART_DATA.live?"":" (sample)"}</div>
+    ${CHART_DATA.live?`<button class="mi" data-mode="live" aria-current="${state.dataMode==='live'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/></svg><span>This run (measured)<div class="mi-sub">${esc(CHART_DATA.live.tag||"live run")}</div></span></button>`:""}
     <button class="mi" data-mode="verified" aria-current="${state.dataMode==='verified'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span>NDM-1 verified<div class="mi-sub">ROC-AUC 0.75 · 11.3× @1% · clean controls</div></span></button>
     <button class="mi" data-mode="illustrative" aria-current="${state.dataMode==='illustrative'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg><span>Illustrative placeholders<div class="mi-sub">Generic shapes from the mockups</div></span></button>
     <div class="m-sep"></div>
@@ -1621,17 +1626,33 @@ $("#provenance").addEventListener("click",()=>{
   `,m=>{ $$("[data-mode]",m).forEach(b=>b.addEventListener("click",()=>{ setDataMode(b.dataset.mode); closeMenus(); })); });
 });
 function setDataMode(mode){
+  if(mode==="live"&&!CHART_DATA.live) return;   // nothing measured yet
   state.dataMode=mode; updateProvenance(); savePersist();
   // refresh any open result pane + previews
   if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
   renderPreviews();
-  toast(mode==="verified"?"Showing NDM-1 verified sample":"Showing illustrative placeholders");
+  toast(mode==="live"?"Showing this run's measured results"
+      :mode==="verified"?"Showing NDM-1 verified sample":"Showing illustrative placeholders");
+}
+/* Take the charts, shortlist and headline stats from a finished run. The
+   bundled sample stays selectable, so a viewer can always see which is which. */
+function adoptRunData(data){
+  if(!data||!data.charts) return;
+  CHART_DATA.live=data.charts;
+  state.dataMode="live"; updateProvenance();
+  if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
+  renderPreviews(); savePersist();
 }
 function updateProvenance(){
   const d=curData();
-  el.provenance.dataset.kind = state.run.active ? (state.run.mode==="live"?"live":"replay") : "sample";
+  // Once a run has happened the displayed data is measured, so the badge must
+  // stop calling it sample data.
+  const showingMeasured = state.dataMode==="live" && !!CHART_DATA.live;
+  el.provenance.dataset.kind = state.run.active
+    ? (state.run.mode==="live"?"live":"replay")
+    : (showingMeasured?"live":"sample");
   if(state.run.active){ el.provText.textContent = state.run.mode==="live"?"Live Omnigent run":"Replaying trace"; el.provTextLong.textContent=""; }
-  else { el.provText.textContent="Sample data"; el.provTextLong.textContent="· "+d.tag; }
+  else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent="· "+d.tag; }
 }
 $("#addNode").addEventListener("click",()=>{
   const types=[["question","Question"],["source","Source / evidence"],["hypothesis","Hypothesis"],["experiment","Experiment"],["result","Result"],["note","Note"]];
@@ -1844,7 +1865,12 @@ async function runViaBackend(expId,runId){
 function applyBackendEvent(ev,expId,runId){
   if(ev.type==="status"&&ev.node) setStatus(ev.node,ev.status);
   else if(ev.type==="act") logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
-  else if(ev.type==="result"){ if(ev.node){ setStatus(ev.node,"done"); togglePreview(ev.node,true); } }
+  else if(ev.type==="result"){
+    // Adopt this run's own charts, tables and shortlist. Until a run happens
+    // the canvas shows the bundled sample; from here it shows what was measured.
+    adoptRunData(ev.data);
+    if(ev.node){ setStatus(ev.node,"done"); togglePreview(ev.node,true); }
+  }
   // A server-side failure is reported as itself, not hidden behind a replay.
   else if(ev.type==="error"){
     logEvent({agent:"Relay",msg:ev.msg||"Run failed on the server",st:"failed"});
