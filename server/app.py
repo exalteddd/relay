@@ -407,6 +407,41 @@ def resolve():
     return jsonify(plan)
 
 
+@app.post("/api/ask")
+def ask():
+    """A short answer from the model's own knowledge.
+
+    Distinct from a run: no literature is searched and nothing is verified,
+    so the response says as much. It exists because most questions deserve a
+    sentence before they deserve four minutes and a graph.
+    """
+    user = current_user()
+    if not may_run(user):
+        return jsonify(error="Sign in to use this"), 401 if user is None else 403
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()[:500]
+    if not question:
+        return jsonify(error="Nothing to answer"), 400
+
+    from brain import prompts
+    from brain.config import load_config
+    from brain.llm import LLM
+
+    cfg = load_config()
+    if cfg.provider == "openai" and not cfg.openai_api_key:
+        return jsonify(error="No model key on this server. Set OPENAI_API_KEY and redeploy."), 503
+    try:
+        out = LLM(cfg).json("ask", prompts.QUICK_ANSWER, f"Question: {question}",
+                            fast=False, max_tokens=900, context={"question": question})
+    except Exception as exc:
+        app.logger.warning("ask failed: %s", exc)
+        return jsonify(error=f"The model call failed: {str(exc)[:140]}"), 502
+    return jsonify(answer=str(out.get("answer") or "")[:2000],
+                   confidence=str(out.get("confidence") or "")[:20],
+                   caveat=str(out.get("caveat") or "")[:300],
+                   grounded=False)
+
+
 # --- runs ---------------------------------------------------------------
 @app.post("/api/run")
 def run():

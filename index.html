@@ -918,7 +918,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
             <button class="plus-btn" id="cmdPlus" title="Add a node" aria-label="Add a node" aria-haspopup="menu">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
-            <input id="cmdInput" placeholder="Ask a research question and run it…" autocomplete="off" aria-label="This project's research question">
+            <input id="cmdInput" placeholder="Ask anything — answers appear on the right" autocomplete="off" aria-label="This project's research question">
             <button class="send-btn" id="cmdSend" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             </button>
@@ -2326,12 +2326,79 @@ function syncQuestionBar(){
   const q=questionNode();
   inp.value = q ? (q.meta.objective||q.summary||q.title||"") : (state.question||"");
 }
+/* The bar asks the model a question and shows the answer beside the graph.
+   It is deliberately not a run: no literature is searched and nothing is
+   verified, so it costs a cent and a few seconds rather than minutes. Keep
+   an answer and it becomes a note on the canvas; run the question instead
+   and you get the researched version. */
 async function sendCmd(){
   const inp=$("#cmdInput"); const t=inp.value.trim();
-  if(!t){ toast("Type a research question"); return; }
-  // Asking is the whole gesture: the question is recorded on the graph and
-  // the run it implies is offered straight away. Previously this only edited
-  // a field, which is not what "ask" means.
+  if(!t){ toast("Ask a question"); return; }
+  state.lastAsk={question:t,answer:null};
+  showAnswerPane(t,null,"asking");
+  try{
+    const r=await api("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+                                  body:JSON.stringify({question:t})});
+    let j=null, raw="";
+    try{ j=await r.clone().json(); }catch(e){ raw=(await r.text()).slice(0,140); }
+    if(!r.ok||!j){ showAnswerPane(t,{error:(j&&j.error)||raw||`${r.status} ${r.statusText}`},"error"); return; }
+    state.lastAsk={question:t,answer:j};
+    showAnswerPane(t,j,"done");
+  }catch(e){
+    showAnswerPane(t,{error:`The request never completed: ${e.message||e}`},"error");
+  }
+}
+
+function showAnswerPane(question,data,phase){
+  state.selection=null;
+  $$(".node",el.nodes).forEach(d=>d.classList.remove("selected"));
+  state.pane.open=true;
+  el.pane.hidden=false; el.divider.hidden=false; el.app.classList.add("pane-open");
+  if(state.pane.widthPx) el.pane.style.width=state.pane.widthPx+"px";
+  $("#paneDot").style.background=dotColor("note");
+  $("#paneType").textContent="Answer";
+  $("#paneName").textContent=question.length>70?question.slice(0,68)+"…":question;
+  const chip=$("#paneStatus"); chip.dataset.st=phase==="done"?"done":"planned";
+  chip.innerHTML=phase==="asking"?"<span class='glyph'>○</span>Thinking"
+    :phase==="error"?"<span class='glyph'>×</span>Failed":"<span class='glyph'>✓</span>Answered";
+
+  if(phase==="asking"){
+    el.paneBody.innerHTML=`<div class="empty-state"><p>Asking the model…</p></div>`;
+    return;
+  }
+  if(phase==="error"){
+    el.paneBody.innerHTML=`<div class="empty-state"><h3>Could not answer</h3><p>${esc(data.error)}</p></div>`;
+    return;
+  }
+  el.paneBody.innerHTML=`
+    <div class="section"><div class="prose"><p>${esc(data.answer)}</p></div></div>
+    ${sectionKV("Appraisal",{Confidence:data.confidence,Caveat:data.caveat})}
+    <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Answered from the model's own knowledge. No literature was searched and no citation here is verified. Run the question to get the researched version.</span></div>
+    ${actionRow([{id:"save-answer",label:"Keep as a note",icon:IC.plus,primary:true},
+                 {id:"run-question",label:"Research this properly",icon:IC.play}])}`;
+  $$("[data-paneact]",el.paneBody).forEach(b=>b.addEventListener("click",()=>{
+    if(b.dataset.paneact==="save-answer") saveAnswerNote();
+    else { closePane(); runCurrentQuestion(); }
+  }));
+}
+
+function saveAnswerNote(){
+  const a=state.lastAsk; if(!a||!a.answer) return;
+  const id="n-"+Math.random().toString(36).slice(2,6);
+  const text=`Q: ${a.question}\n\n${a.answer.answer}`;
+  const n=P(id,"note",a.question.slice(0,44),a.answer.answer.slice(0,88),"done",0,0,
+            {text,confidence:a.answer.confidence,caveat:a.answer.caveat});
+  n.origin="user";
+  curProj().nodes.push(n);
+  const q=questionNode(); if(q) curProj().edges.push({from:q.id,to:id,rel:"uses"});
+  relayout(); savePersist(); selectNode(id);
+  toast("Saved to the graph");
+}
+
+/* Run the project's question through the full pipeline. */
+async function runCurrentQuestion(){
+  const t=(state.lastAsk&&state.lastAsk.question)||state.question||"";
+  if(!t) return;
   state.question=t;
   let q=questionNode();
   if(q){ q.meta=Object.assign({},q.meta,{objective:t}); q.summary=t; q.title="Research question"; }
@@ -2339,13 +2406,7 @@ async function sendCmd(){
     q=P("q-"+Math.random().toString(36).slice(2,6),"question","Research question",t,"done",0,0,{objective:t});
     q.origin="user"; curProj().nodes.push(q);
   }
-  renderGraph();
-  if(state.selection===q.id){ renderPaneHeader(q); renderPaneBody(q); }
-  renderCmdCtx(); savePersist();
-
-  if(state.run.active){ toast("Question updated — it applies to the next run"); return; }
-
-  // The question decides the engine; the approval dialog is still the gate.
+  renderGraph(); renderCmdCtx(); savePersist();
   let mode="literature", why="";
   try{
     const r=await api("/api/resolve?q="+encodeURIComponent(t));
@@ -2415,11 +2476,13 @@ function layoutGraph(p){
   // that is a four-thousand-pixel ribbon, so a wide layer wraps into several
   // sub-columns. Depth order still reads left to right; only the within-layer
   // packing changes.
-  const MAX_ROWS=6;
-  const groups=[];                                    // one entry per rendered column
+  const MAX_COL_H=760;        // taller than this and a column stops being readable
+  const groups=[];            // one entry per rendered column
   for(const layer of layers){
     if(!layer||!layer.length) continue;
-    const subs=Math.ceil(layer.length/MAX_ROWS), per=Math.ceil(layer.length/subs);
+    const total=layer.reduce((t,n)=>t+h(n)+ROW_GAP,-ROW_GAP);
+    const subs=Math.max(1,Math.min(layer.length,Math.ceil(total/MAX_COL_H)));
+    const per=Math.ceil(layer.length/subs);
     for(let s=0;s<subs;s++) groups.push(layer.slice(s*per,(s+1)*per));
   }
   const colH=groups.map(g=>g.reduce((s,n)=>s+h(n)+ROW_GAP,-ROW_GAP));
@@ -2845,20 +2908,28 @@ $("#provenance").addEventListener("click",()=>{
    was this project's previous answer, so keeping both would leave two
    unrelated investigations on one canvas. Anything the user added by hand is
    carried over, because they did not ask for it to be thrown away. */
-function adoptRunGraph(g){
-  if(!g||!g.nodes||!g.nodes.length) return;
+function adoptRunGraph(g,replace){
+  if(!g||!g.nodes) return;
   const p=curProj();
-  const mine=p.nodes.filter(n=>n.origin==="user");
-  const mineIds=new Set(mine.map(n=>n.id));
-  const keptEdges=p.edges.filter(e=>mineIds.has(e.from)&&mineIds.has(e.to));
-  p.nodes=g.nodes.map(n=>Object.assign(
-    P(n.id,n.type,n.title,n.summary||"",n.status||"done",0,0,n.meta||{}),{origin:"run"}));
-  p.edges=g.edges.slice();
-  p.nodes.push(...mine); p.edges.push(...keptEdges);
-  p.primaryExp=null;
-  p.resultNode=null;
+  if(replace){
+    // A run supersedes the previous answer, but not anything you added.
+    const mine=p.nodes.filter(n=>n.origin==="user");
+    const mineIds=new Set(mine.map(n=>n.id));
+    p.nodes=mine.slice();
+    p.edges=p.edges.filter(e=>mineIds.has(e.from)&&mineIds.has(e.to));
+    p.primaryExp=null; p.resultNode=null;
+  }
+  // Merge by id so a node can arrive early and be corrected later, which is
+  // what lets the graph build up while the run is still going.
+  const byId=new Map(p.nodes.map(n=>[n.id,n]));
+  for(const n of g.nodes){
+    const node=Object.assign(P(n.id,n.type,n.title,n.summary||"",n.status||"done",0,0,n.meta||{}),{origin:"run"});
+    const prev=byId.get(n.id);
+    if(prev) Object.assign(prev,node); else { p.nodes.push(node); byId.set(n.id,node); }
+  }
+  const have=new Set(p.edges.map(e=>e.from+">"+e.to));
+  for(const e of (g.edges||[])) if(!have.has(e.from+">"+e.to)){ p.edges.push(e); have.add(e.from+">"+e.to); }
   relayout(); savePersist();
-  toast(`Graph rebuilt from the run — ${g.nodes.length} nodes`);
 }
 
 function adoptRunData(data){
@@ -3578,7 +3649,7 @@ function applyBackendEvent(ev,expId,runId){
         : `Compound screen — ${p.why}`, st:"done"});
     state.run.plan=p;
   }
-  else if(ev.type==="graph"){ adoptRunGraph(ev.data); }
+  else if(ev.type==="graph"){ adoptRunGraph(ev.data,ev.replace); }
   else if(ev.type==="result"){
     // Adopt this run's own charts, tables and shortlist. Until a run happens
     // the canvas shows the bundled sample; from here it shows what was measured.
