@@ -578,6 +578,8 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
 .sharpen-list{margin:9px 0 0;padding-left:17px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
 .sharpen-sub{margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.45}
 .sharpen-actions{display:flex;gap:8px;margin-top:12px}
+.mock-banner{position:fixed;top:0;left:0;right:0;z-index:300;padding:8px 14px;text-align:center;
+  background:#b2420f;color:#fff;font-size:12.5px;font-weight:700;letter-spacing:.01em}
 .static-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:200;
   max-width:min(620px,calc(100vw - 32px));display:flex;gap:12px;align-items:flex-start;
   padding:13px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);
@@ -3355,11 +3357,25 @@ async function refreshAuth(){
     const j=await r.json();
     AUTH.user=j.user; AUTH.mayRun=!!j.mayRun; AUTH.avatar=j.avatar; AUTH.reachable=true;
     AUTH.devOpen=!!j.devOpen;
-    try{ const c=await api("/api/config"); if(c.ok){ const cj=await c.json(); AUTH.configured=!!cj.authConfigured; AUTH.engine=!!cj.engine; } }catch(e){}
+    try{ const c=await api("/api/config"); if(c.ok){ const cj=await c.json(); AUTH.configured=!!cj.authConfigured; AUTH.engine=!!cj.engine;
+      AUTH.provider=cj.provider; AUTH.modelReal=cj.modelReal!==false; } }catch(e){}
   }catch(e){ AUTH.reachable=false; AUTH.user=null; AUTH.mayRun=false; }
-  renderAuth(); staticNotice();
+  renderAuth(); staticNotice(); mockNotice();
   await reloadForAccount();
 }
+/* A mock run produces the same stages and the same graph shape as a real
+   one, so nothing on screen would tell you the hypotheses are placeholders.
+   Say it loudly and do not let it be dismissed. */
+function mockNotice(){
+  const existing=document.querySelector(".mock-banner");
+  if(AUTH.modelReal!==false){ if(existing) existing.remove(); return; }
+  if(existing) return;
+  const b=document.createElement("div");
+  b.className="mock-banner";
+  b.textContent="Stub model in use — hypotheses here are placeholders, not research. Set BRAIN_PROVIDER and restart.";
+  document.body.appendChild(b);
+}
+
 function staticNotice(){
   if(AUTH.reachable||document.querySelector(".static-banner")) return;
   const b=document.createElement("div");

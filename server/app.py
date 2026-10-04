@@ -275,7 +275,17 @@ def health():
 @app.get("/api/config")
 def config():
     """Non-secret facts about this deployment. Never exposes a key's value."""
+    # Which model is answering. A mock run looks exactly like a real one in
+    # the graph -- same stages, same node shapes -- so the one thing that
+    # distinguishes them has to be visible.
+    try:
+        from brain.config import load_config
+        provider = load_config().provider
+    except Exception:
+        provider = "unknown"
     return jsonify(
+        provider=provider,
+        modelReal=(provider not in ("mock", "unknown")),
         authConfigured=AUTH_CONFIGURED,
         authRequired=True,
         engine=engine_available(),
