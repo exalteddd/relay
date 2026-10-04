@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Relay — From question to evidence</title>
+    <meta
+      name="description"
+      content="Plan experiments, trace results, and build on what you find in Relay's connected research workspace."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --blue: #1264ff;
+        --ink: #080e26;
+        --muted: #707b94;
+        --line: #dce5f6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: #fff;
+        color: var(--ink);
+        font-family: "DM Sans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+      }
+      a:focus-visible,
+      button:focus-visible {
+        outline: 3px solid #1264ff;
+        outline-offset: 5px;
+      }
+      header {
+        height: 105px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 4%;
+        max-width: 1800px;
+        margin: auto;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 38px;
+        font-weight: 700;
+        letter-spacing: -2px;
+      }
+      .brand svg {
+        width: 42px;
+        height: 44px;
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        font-size: 14px;
+      }
+      .signin {
+        border: 1px solid #c2cce1;
+        border-radius: 10px;
+        padding: 12px 28px;
+      }
+      .hero {
+        max-width: 1800px;
+        margin: auto;
+        min-height: calc(100svh - 105px);
+        position: relative;
+        display: grid;
+        grid-template-columns: 40% 60%;
+        align-items: center;
+        padding: 0 3.5% 60px;
+      }
+      .hero-copy {
+        z-index: 2;
+        padding-bottom: 30px;
+        pointer-events: none;
+      }
+      .hero-copy a {
+        pointer-events: auto;
+      }
+      h1 {
+        font-family: "DM Serif Display", Georgia, serif;
+        font-weight: 400;
+        font-size: clamp(66px, 7.25vw, 125px);
+        line-height: 0.98;
+        letter-spacing: -0.065em;
+        margin: 0 0 32px;
+      }
+      h1 span {
+        color: var(--blue);
+      }
+      .intro {
+        font-size: clamp(15px, 1.25vw, 21px);
+        color: var(--muted);
+        line-height: 1.7;
+        margin: 0 0 34px;
+        white-space: nowrap;
+      }
+      .actions {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 25px;
+        min-height: 60px;
+        padding: 0 30px;
+        border-radius: 9px;
+        border: 1px solid #bcc9e1;
+        font-size: 16px;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+      .button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px #10274c10;
+      }
+      .primary {
+        background: var(--blue);
+        color: white;
+        border-color: var(--blue);
+        box-shadow: 0 5px 15px #1264ff16;
+      }
+      .tree-wrap {
+        position: relative;
+        width: 112%;
+        margin-left: -9%;
+        align-self: stretch;
+        min-height: 650px;
+      }
+      .tree {
+        height: 100%;
+        width: 100%;
+        position: absolute;
+        overflow: visible;
+      }
+      .branch {
+        fill: none;
+        stroke: var(--blue);
+        stroke-width: 0.8;
+        stroke-linecap: round;
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+        animation: grow var(--duration) cubic-bezier(0.25, 0.1, 0.35, 1)
+          var(--delay) forwards;
+      }
+      .node {
+        fill: #1767ff;
+        opacity: 0;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: appear 0.5s ease var(--delay) forwards;
+      }
+      .node.major {
+        fill: #a4c6ff;
+        stroke: #1264ff;
+        stroke-width: 1;
+      }
+      .tree-card {
+        position: absolute;
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+        background: #ffffffed;
+        border: 1px solid #d7e4ff;
+        border-radius: 11px;
+        padding: 15px 17px;
+        width: 190px;
+        box-shadow: 0 9px 24px #20468303;
+        opacity: 0;
+        animation: card-in 0.7s ease var(--delay) forwards;
+        transition:
+          box-shadow 0.2s,
+          translate 0.2s;
+      }
+      .tree-card:hover {
+        box-shadow: 0 12px 35px #1264ff18;
+        translate: 0 -4px;
+      }
+      .tree-card svg {
+        width: 24px;
+        height: 25px;
+        flex: none;
+        color: var(--blue);
+      }
+      .tree-card strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .tree-card small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .evidence {
+        left: 23%;
+        top: 22%;
+        --delay: 2.8s;
+      }
+      .hypotheses {
+        left: 8%;
+        top: 53%;
+        --delay: 2.2s;
+      }
+      .experiments {
+        left: 66%;
+        top: 53%;
+        --delay: 2.2s;
+      }
+      .results {
+        left: 73%;
+        top: 22%;
+        --delay: 3.1s;
+      }
+      .question {
+        left: 45%;
+        bottom: 0;
+        transform: translateX(-50%);
+        --delay: 0.15s;
+      }
+      .replay {
+        position: absolute;
+        bottom: 12px;
+        right: 0;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 11px;
+        cursor: pointer;
+        padding: 12px;
+      }
+      .section {
+        max-width: 1340px;
+        margin: auto;
+        padding: 110px 50px;
+      }
+      .section-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 30px;
+        margin-bottom: 45px;
+      }
+      .eyebrow {
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        color: var(--blue);
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-family: "DM Serif Display", Georgia, serif;
+        font-weight: 400;
+        font-size: clamp(38px, 4vw, 58px);
+        letter-spacing: -0.035em;
+        line-height: 1.08;
+        margin: 0;
+      }
+      .section-heading p {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+        max-width: 330px;
+        margin: 0;
+      }
+      .preview-shell {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 24px 70px #1b3a7310;
+        background: #fbfdff;
+      }
+      .preview-toolbar {
+        display: flex;
+        justify-content: space-between;
+        padding: 20px 26px;
+        background: white;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+      }
+      .sample {
+        color: #5f7395;
+        background: #edf3fc;
+        border-radius: 20px;
+        padding: 5px 10px;
+        font-size: 10px;
+      }
+      .graph-area {
+        padding: 50px 34px;
+        display: grid;
+        grid-template-columns: 1fr 42%;
+        gap: 34px;
+        background-image: radial-gradient(#dce6f7 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+      .flow {
+        width: 100%;
+        height: 300px;
+      }
+      .flow text {
+        font-family: "DM Sans", sans-serif;
+        font-size: 13px;
+        fill: var(--ink);
+      }
+      .flow .sub {
+        fill: var(--muted);
+        font-size: 10px;
+      }
+      .flow rect {
+        fill: white;
+        stroke: #cbdcf8;
+        rx: 10;
+      }
+      .flow path {
+        fill: none;
+        stroke: #4e8aff;
+        stroke-width: 1.4;
+      }
+      .flow g {
+        cursor: pointer;
+      }
+      .flow g:hover rect {
+        stroke: var(--blue);
+        stroke-width: 2;
+      }
+      .detail {
+        background: white;
+        border: 1px solid #ccddf8;
+        border-radius: 12px;
+        padding: 24px;
+      }
+      .detail .label {
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--blue);
+      }
+      .detail h3 {
+        font-size: 18px;
+        margin: 12px 0;
+      }
+      .detail p {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .detail a {
+        font-size: 12px;
+        color: var(--blue);
+      }
+      .chart {
+        width: 100%;
+        height: auto;
+      }
+      .chart text {
+        font-family: "DM Sans", sans-serif;
+        fill: #77839a;
+        font-size: 10px;
+      }
+      .chart-grid {
+        stroke: #e8edf5;
+        stroke-width: 1;
+      }
+      .legend {
+        display: flex;
+        gap: 18px;
+        font-size: 10px;
+        color: var(--muted);
+        margin: 10px 0;
+      }
+      .legend span:before {
+        content: "";
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--blue);
+        margin-right: 6px;
+      }
+      .legend span + span:before {
+        background: #a9b8ce;
+      }
+      .result-grid {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr;
+        gap: 24px;
+        margin-top: 24px;
+      }
+      .result-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 28px;
+        background: white;
+      }
+      .result-card h3 {
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      .result-card p {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.7;
+        margin: 0 0 20px;
+      }
+      .rank {
+        display: grid;
+        grid-template-columns: 52px 1fr 35px;
+        gap: 15px;
+        align-items: center;
+        margin: 23px 0;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .bar {
+        height: 14px;
+        background: #f2f6fd;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar i {
+        height: 100%;
+        display: block;
+        background: linear-gradient(90deg, #77aaff, #1264ff);
+        border-radius: 3px;
+      }
+      .footnote {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 18px;
+      }
+      .closing {
+        text-align: center;
+        background: #f8fbff;
+        border-top: 1px solid #e9eff8;
+        padding: 80px 24px;
+      }
+      .closing h2 {
+        margin-bottom: 28px;
+      }
+      footer {
+        max-width: 1340px;
+        margin: auto;
+        display: flex;
+        justify-content: space-between;
+        padding: 30px 50px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      @keyframes grow {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes appear {
+        from {
+          opacity: 0;
+          scale: 0.2;
+        }
+        to {
+          opacity: 1;
+          scale: 1;
+        }
+      }
+      @keyframes card-in {
+        from {
+          opacity: 0;
+          translate: 0 10px;
+        }
+        to {
+          opacity: 1;
+          translate: 0 0;
+        }
+      }
+      @media (min-width: 1700px) {
+        .tree-wrap {
+          min-height: 790px;
+        }
+      }
+      @media (max-width: 1000px) {
+        header {
+          height: 85px;
+        }
+        .hero {
+          grid-template-columns: 43% 57%;
+          min-height: 700px;
+        }
+        .tree-wrap {
+          min-height: 610px;
+        }
+        h1 {
+          font-size: 70px;
+        }
+        .intro {
+          white-space: normal;
+          font-size: 15px;
+        }
+        .actions {
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .button {
+          font-size: 13px;
+          padding: 0 20px;
+          min-height: 50px;
+        }
+        .tree-card {
+          width: 155px;
+          padding: 12px;
+          gap: 8px;
+        }
+        .tree-card small {
+          font-size: 10px;
+        }
+        .tree-card svg {
+          width: 18px;
+        }
+        .results {
+          left: 66%;
+        }
+        .graph-area {
+          grid-template-columns: 1fr 40%;
+          padding: 30px 20px;
+          gap: 15px;
+        }
+      }
+      @media (max-width: 700px) {
+        header {
+          padding: 0 22px;
+        }
+        .brand {
+          font-size: 30px;
+        }
+        .brand svg {
+          width: 32px;
+        }
+        nav {
+          gap: 18px;
+          font-size: 12px;
+        }
+        .signin {
+          padding: 10px 16px;
+        }
+        .hero {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          padding: 45px 24px 30px;
+        }
+        .hero-copy {
+          padding: 0;
+        }
+        h1 {
+          font-size: 64px;
+          line-height: 1.02;
+          letter-spacing: -0.055em;
+          margin-bottom: 22px;
+        }
+        h1 br:first-child {
+          display: none;
+        }
+        .intro {
+          font-size: 14px;
+          max-width: 320px;
+          margin-bottom: 24px;
+        }
+        .tree-wrap {
+          width: 110%;
+          margin-left: -5%;
+          height: 520px;
+          min-height: 0;
+          margin-top: 35px;
+        }
+        .tree-card {
+          width: 133px;
+          padding: 10px;
+        }
+        .tree-card strong {
+          font-size: 11px;
+        }
+        .tree-card small {
+          font-size: 9px;
+        }
+        .tree-card svg {
+          display: none;
+        }
+        .evidence {
+          left: 15%;
+          top: 24%;
+        }
+        .results {
+          left: 66%;
+          top: 24%;
+        }
+        .hypotheses {
+          left: 1%;
+        }
+        .experiments {
+          left: 65%;
+        }
+        .question {
+          bottom: 5px;
+          left: 48%;
+        }
+        .section {
+          padding: 65px 22px;
+        }
+        .section-heading {
+          display: block;
+          margin-bottom: 28px;
+        }
+        .section-heading p {
+          margin-top: 20px;
+        }
+        .graph-area {
+          display: block;
+          padding: 12px;
+        }
+        .flow {
+          height: 240px;
+        }
+        .detail {
+          margin-top: 10px;
+        }
+        .result-grid {
+          grid-template-columns: 1fr;
+        }
+        .preview-toolbar {
+          padding: 16px;
+          font-size: 11px;
+        }
+        .replay {
+          bottom: -20px;
+        }
+        .closing {
+          padding: 60px 24px;
+        }
+        footer {
+          padding: 25px 22px;
+        }
+        .section h2 {
+          font-size: 40px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+        .branch {
+          stroke-dashoffset: 0;
+        }
+        .node,
+        .tree-card {
+          opacity: 1;
+        }
+        .replay {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/" aria-label="Relay home"
+        ><svg viewBox="0 0 44 46" aria-hidden="true">
+          <path
+            d="M10 33 24 10 34 36Z"
+            fill="none"
+            stroke="#1264ff"
+            stroke-width="3"
+          />
+          <g fill="#1264ff">
+            <circle cx="10" cy="33" r="8" />
+            <circle cx="24" cy="10" r="8" />
+            <circle cx="34" cy="36" r="8" />
+          </g></svg
+        >relay</a
+      >
+      <nav aria-label="Main navigation">
+        <a href="/workspace">Projects</a
+        ><a class="signin" href="/auth/login?next=/workspace">Sign in</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">
+            From<br />
+            question<br />
+            to evidence<span>.</span>
+          </h1>
+          <p class="intro">
+            Plan experiments. Trace results. Build on what you find.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="/workspace"
+              >Open workspace <span aria-hidden="true">→</span></a
+            ><a class="button" href="#research-preview">Explore a sample</a>
+          </div>
+        </div>
+        <div class="tree-wrap">
+          <svg
+            class="tree"
+            viewBox="0 0 850 740"
+            role="img"
+            aria-label="A research tree grows from a question into connected evidence, hypotheses, experiments and results"
+          ></svg>
+          <a class="tree-card evidence" href="#research-preview"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            >
+              <ellipse cx="12" cy="5" rx="8" ry="3" />
+              <path
+                d="M4 5v14c0 4 16 4 16 0V5M4 10c0 4 16 4 16 0M4 15c0 4 16 4 16 0"
+              />
+            </svg>
+            <div>
+              <strong>Evidence</strong
+              ><small>Papers, data, and<br />prior results.</small>
+            </div></a
+          >
+          <a class="tree-card hypotheses" href="#research-preview"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            >
+              <path
+                d="M8 17c0-5-4-4-4-9a8 8 0 0 1 16 0c0 5-4 4-4 9ZM8 20h8M10 23h4M12 8v9"
+              />
+            </svg>
+            <div>
+              <strong>Hypotheses</strong
+              ><small>Plausible explanations<br />to investigate.</small>
+            </div></a
+          >
+          <a class="tree-card experiments" href="#research-preview"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            >
+              <path d="M8 2h8M10 2v8L3 21h18l-7-11V2M7 15h10" />
+            </svg>
+            <div>
+              <strong>Experiments</strong
+              ><small>Design, run, and<br />compare.</small>
+            </div></a
+          >
+          <a class="tree-card results" href="#results"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            >
+              <path d="M2 22h21M4 19V9h4v10M11 19V3h4v16M18 19V6h4v13" />
+            </svg>
+            <div>
+              <strong>Results</strong
+              ><small>Findings and<br />implications.</small>
+            </div></a
+          >
+          <a class="tree-card question" href="/workspace"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            >
+              <path d="M5 2h10l5 5v15H5ZM14 2v6h6M8 12h8M8 16h8" />
+            </svg>
+            <div>
+              <strong>Question</strong
+              ><small>What should we<br />investigate next?</small>
+            </div></a
+          ><button
+            class="replay"
+            type="button"
+            aria-label="Replay tree growth animation"
+          >
+            ↻ Replay growth
+          </button>
+        </div>
+      </section>
+      <section class="section" id="research-preview">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow">Inside the workspace</div>
+            <h2>Follow every step.<br />Inspect every connection.</h2>
+          </div>
+          <p>
+            Move through a research question, its evidence, and the experiments
+            that test it. Select a node to look closer.
+          </p>
+        </div>
+        <div class="preview-shell">
+          <div class="preview-toolbar">
+            <span
+              >Materials stability <span style="color: #9aa8c0"> / </span> Model
+              evaluation</span
+            ><span class="sample">Illustrative project</span>
+          </div>
+          <div class="graph-area">
+            <svg
+              class="flow"
+              viewBox="0 0 580 300"
+              aria-label="Interactive sample research graph"
+            >
+              <path
+                d="M145 150H175Q190 150 190 135V80Q190 65 210 65H230M145 150H175Q190 150 190 170V235H230M355 65H385Q405 65 405 85V130Q405 150 425 150H440M355 235H385Q405 235 405 215V170Q405 150 425 150"
+              />
+              <g
+                tabindex="0"
+                role="button"
+                data-step="question"
+                aria-label="Inspect research question"
+              >
+                <rect x="5" y="118" width="140" height="64" />
+                <text x="20" y="144">Question</text>
+                <text class="sub" x="20" y="164">
+                  Where does the model fail?
+                </text>
+              </g>
+              <g
+                tabindex="0"
+                role="button"
+                data-step="evidence"
+                aria-label="Inspect evidence"
+              >
+                <rect x="230" y="33" width="125" height="64" />
+                <text x="245" y="59">Evidence</text>
+                <text class="sub" x="245" y="79">Data + literature</text>
+              </g>
+              <g
+                tabindex="0"
+                role="button"
+                data-step="hypothesis"
+                aria-label="Inspect hypothesis"
+              >
+                <rect x="230" y="203" width="125" height="64" />
+                <text x="245" y="229">Hypothesis</text>
+                <text class="sub" x="245" y="249">Unfamiliar families</text>
+              </g>
+              <g
+                tabindex="0"
+                role="button"
+                data-step="results"
+                aria-label="Inspect results"
+              >
+                <rect
+                  x="440"
+                  y="118"
+                  width="135"
+                  height="64"
+                  style="fill: #1264ff; stroke: #1264ff"
+                />
+                <text x="455" y="144" style="fill: white">Results</text>
+                <text x="455" y="164" style="fill: #dbe8ff; font-size: 10px">
+                  Compare model error
+                </text>
+              </g>
+            </svg>
+            <div class="detail" aria-live="polite">
+              <span class="label" id="detail-label">Results</span>
+              <h3 id="detail-title">Does targeted data help?</h3>
+              <p id="detail-copy">
+                Compare a baseline model with one given additional examples from
+                an unfamiliar chemical family.
+              </p>
+              <div id="detail-chart">
+                <div class="legend">
+                  <span>Targeted examples</span><span>Baseline</span>
+                </div>
+                <svg
+                  class="chart"
+                  viewBox="0 0 350 170"
+                  aria-label="Illustrative chart: error decreases as targeted examples increase"
+                >
+                  <g class="chart-grid">
+                    <path d="M35 15V135H335M35 35H335M35 70H335M35 105H335" />
+                  </g>
+                  <path
+                    d="M35 40 95 50 155 72 215 95 275 110 335 118"
+                    fill="none"
+                    stroke="#1264ff"
+                    stroke-width="3"
+                  />
+                  <path
+                    d="M35 40 95 44 155 48 215 51 275 53 335 54"
+                    fill="none"
+                    stroke="#a9b8ce"
+                    stroke-width="2"
+                  />
+                  <text x="35" y="155">0</text>
+                  <text x="160" y="155">New examples</text>
+                  <text x="320" y="155">100</text>
+                  <text x="2" y="20">Error</text>
+                </svg>
+              </div>
+              <a href="/workspace">Open the full workspace →</a>
+            </div>
+          </div>
+        </div>
+        <div class="result-grid" id="results">
+          <article class="result-card">
+            <h3>See where your model breaks down</h3>
+            <p>
+              Compare performance across familiar and unfamiliar material
+              families.
+            </p>
+            <svg
+              class="chart"
+              viewBox="0 0 550 225"
+              aria-label="Illustrative model error by chemical family"
+            >
+              <g class="chart-grid">
+                <path d="M55 15V180H530M55 45H530M55 90H530M55 135H530" />
+              </g>
+              <g fill="#b9d2ff">
+                <rect x="98" y="124" width="35" height="56" rx="3" />
+                <rect x="220" y="88" width="35" height="92" rx="3" />
+                <rect x="342" y="32" width="35" height="148" rx="3" />
+                <rect x="464" y="56" width="35" height="124" rx="3" />
+              </g>
+              <g fill="#1264ff">
+                <rect x="138" y="136" width="35" height="44" rx="3" />
+                <rect x="260" y="119" width="35" height="61" rx="3" />
+                <rect x="382" y="110" width="35" height="70" rx="3" />
+                <rect x="504" y="116" width="26" height="64" rx="3" />
+              </g>
+              <text x="105" y="204">Oxides</text>
+              <text x="223" y="204">Sulfides</text>
+              <text x="343" y="204">Nitrides</text>
+              <text x="464" y="204">Halides</text>
+              <text x="4" y="22">Error</text>
+            </svg>
+            <div class="legend">
+              <span>After targeted data</span><span>Before</span>
+            </div>
+          </article>
+          <article class="result-card">
+            <h3>Choose what to test next</h3>
+            <p>
+              Rank candidate experiments by their estimated value to the
+              investigation.
+            </p>
+            <div class="rank">
+              <span>Test 01</span>
+              <div class="bar"><i style="width: 88%"></i></div>
+              <span>0.88</span>
+            </div>
+            <div class="rank">
+              <span>Test 02</span>
+              <div class="bar"><i style="width: 72%"></i></div>
+              <span>0.72</span>
+            </div>
+            <div class="rank">
+              <span>Test 03</span>
+              <div class="bar"><i style="width: 54%"></i></div>
+              <span>0.54</span>
+            </div>
+            <div class="rank">
+              <span>Test 04</span>
+              <div class="bar"><i style="width: 36%"></i></div>
+              <span>0.36</span>
+            </div>
+            <div class="rank">
+              <span>Test 05</span>
+              <div class="bar"><i style="width: 23%"></i></div>
+              <span>0.23</span>
+            </div>
+          </article>
+        </div>
+        <p class="footnote">
+          Sample project and synthetic chart values shown to illustrate the
+          workspace.
+        </p>
+      </section>
+      <section class="closing">
+        <h2>Start with a question.</h2>
+        <a class="button primary" href="/workspace"
+          >Open workspace <span aria-hidden="true">→</span></a
+        >
+      </section>
+    </main>
+    <footer>
+      <span>relay</span
+      ><a href="https://github.com/exalteddd/relay">GitHub ↗</a>
+    </footer>
+    <script>
+      (() => {
+        const svg = document.querySelector(".tree"),
+          NS = "http://www.w3.org/2000/svg";
+        let seed = 29;
+        const rand = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+        function el(tag, attrs) {
+          const n = document.createElementNS(NS, tag);
+          Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+          svg.append(n);
+          return n;
+        }
+        function branch(x, y, tx, ty, depth, delay, side) {
+          const duration = 0.65 + depth * 0.025;
+          el("path", {
+            d: `M${x},${y} C${x},${y - (y - ty) * 0.65} ${tx},${ty + (y - ty) * 0.22} ${tx},${ty}`,
+            class: "branch",
+            pathLength: 1,
+            style: `--delay:${delay}s;--duration:${duration}s;opacity:${0.38 + depth * 0.1}`,
+          });
+          el("circle", {
+            cx: tx,
+            cy: ty,
+            r: depth > 2 ? 4 + depth * 0.6 : 1.8 + rand() * 1.2,
+            class: "node" + (depth > 2 ? " major" : ""),
+            style: `--delay:${delay + duration * 0.8}s`,
+          });
+          if (depth <= 0) return;
+          const len = 31 + depth * 12;
+          const spread = 14 + depth * 9;
+          branch(
+            tx,
+            ty,
+            tx - spread * (0.6 + rand() * 0.7),
+            ty - len * (0.6 + rand() * 0.4),
+            depth - 1,
+            delay + duration * 0.76,
+            -1,
+          );
+          branch(
+            tx,
+            ty,
+            tx + spread * (0.6 + rand() * 0.7),
+            ty - len * (0.6 + rand() * 0.4),
+            depth - 1,
+            delay + duration * 0.76,
+            1,
+          );
+        }
+        function draw() {
+          svg.replaceChildren();
+          seed = 29;
+          const root = { x: 425, y: 655 };
+          const stems = [
+            [220, 440, 4],
+            [600, 435, 4],
+            [325, 315, 4],
+            [470, 245, 4],
+            [675, 320, 3],
+            [150, 540, 3],
+            [690, 535, 3],
+          ];
+          for (const [x, y, d] of stems)
+            branch(root.x, root.y, x, y, d, 0.1, 0);
+          el("circle", {
+            cx: 425,
+            cy: 655,
+            r: 18,
+            fill: "#eaf2ff",
+            class: "node",
+            style: "--delay:0s",
+          });
+          el("circle", {
+            cx: 425,
+            cy: 655,
+            r: 12,
+            fill: "#1264ff",
+            stroke: "white",
+            "stroke-width": 2,
+            class: "node",
+            style: "--delay:0s",
+          });
+        }
+        draw();
+        document.querySelector(".replay").addEventListener("click", () => {
+          draw();
+          document.querySelectorAll(".tree-card").forEach((c) => {
+            c.style.animation = "none";
+            void c.offsetWidth;
+            c.style.animation = "";
+          });
+        });
+        const steps = {
+          question: [
+            "Question",
+            "Where does the model fail?",
+            "Investigate whether predictions remain reliable for chemical families absent from the training data.",
+          ],
+          evidence: [
+            "Evidence",
+            "Start with traceable sources.",
+            "Connect a dataset, the model evaluation, and relevant papers to the same research question.",
+          ],
+          hypothesis: [
+            "Hypothesis",
+            "Unfamiliar families need targeted examples.",
+            "Test whether adding selected examples repairs errors more effectively than adding randomly selected data.",
+          ],
+          results: [
+            "Results",
+            "Does targeted data help?",
+            "Compare a baseline model with one given additional examples from an unfamiliar chemical family.",
+          ],
+        };
+        document.querySelectorAll("[data-step]").forEach((n) => {
+          const activate = () => {
+            const key = n.dataset.step,
+              d = steps[key];
+            document.getElementById("detail-label").textContent = d[0];
+            document.getElementById("detail-title").textContent = d[1];
+            document.getElementById("detail-copy").textContent = d[2];
+            document.getElementById("detail-chart").hidden = key !== "results";
+          };
+          n.addEventListener("click", activate);
+          n.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              activate();
+            }
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
