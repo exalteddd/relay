@@ -23,3 +23,8 @@ relay_data/trace.json
 # Server runtime
 medlab/relay_data/events.jsonl
 medlab/relay_data/ranked.json
+
+# Local project store (SQLite fallback when DATABASE_URL is unset)
+relay.db
+relay.db-journal
+*.sqlite3
