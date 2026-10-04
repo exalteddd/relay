@@ -77,8 +77,33 @@ against the claims it cites.
 For each, check: Is it actually supported by the cited claims? Is it already established \
 (i.e. not novel)? Is it falsifiable and specific? Is the proposed experiment able to test it?
 Verdict: keep | revise (give a sharper revised_statement) | drop.
+Drop it when the cited claims do not support it and no rewording would fix that, \
+when it is already established, when it is not falsifiable as posed, or when the \
+proposed experiment could not distinguish it from the obvious alternatives. Revise \
+only when a sharper statement genuinely repairs the problem. Do not default to \
+revise: it is the right verdict for a fixable hypothesis, not a way to avoid \
+judging a bad one. Verdicts should differ across a set unless the set really is \
+uniform.
 prior_confidence: your probability (0-1) that the hypothesis is true, before any experiment.
 
 Return JSON: {"reviews": [{"id": "H01", "verdict": "...", "issues": ["..."], \
 "revised_statement": null or "...", "already_established": true/false, \
 "prior_confidence": 0.0-1.0, "comment": "one sentence"}]}"""
+
+
+REFINE_QUESTION = """You sharpen research questions for a computational biomedical lab.
+
+Rewrite the question so it is specific, technically precise, and answerable \
+from literature and computation. A good question names the intervention or \
+entity, the target or system, the population or context where relevant, and \
+the outcome being measured. Keep the author's intent — do not substitute a \
+different question.
+
+Judge whether the original is too broad to research as written. "Too broad" \
+means no single study or run could answer it, not merely that it is short.
+
+Return JSON:
+{"refined": "the sharpened question",
+ "too_broad": true/false,
+ "changes": ["what you tightened, one short clause each"],
+ "missing": ["anything the author still needs to decide, or an empty list"]}"""

@@ -163,8 +163,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .sidebar-foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:3px}
 .foot-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--ink-2);background:transparent;border:0;font-size:13px;font-weight:600;width:100%;text-align:left;transition:background .14s,color .14s}
 .foot-row:hover{background:var(--surface-2);color:var(--ink)}
-.foot-row svg{width:16px;height:16px;color:var(--ink-3)}
-.avatar{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
+.foot-row>svg{width:22px;height:22px;padding:3px;box-sizing:border-box;color:var(--ink-3);flex:0 0 auto}
+.foot-row{gap:9px}
+.avatar{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:0 0 auto}
 
 /* --------------------------------- main --------------------------------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
@@ -222,7 +223,10 @@ button{font-family:inherit;color:inherit;cursor:pointer}
   touch-action:none;cursor:grab;
 }
 .canvas.panning{cursor:grabbing}
-.world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+.world{position:absolute;top:0;left:0;transform-origin:0 0}
+/* Promote only while a gesture is running: a permanently promoted layer is
+   rasterized once and scaled, which is what made zoomed-in text grainy. */
+.canvas.panning .world,.canvas.zooming .world{will-change:transform}
 .edges{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;width:10px;height:10px}
 #nodes{position:absolute;top:0;left:0}
 
@@ -235,11 +239,44 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 }
 .node:hover{box-shadow:var(--shadow-md);border-color:var(--accent-ring)}
 .node.selected{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
-.node.dragging{box-shadow:var(--shadow-lg);z-index:20;cursor:grabbing}
 .node.pulse{animation:nodepulse 1.1s ease}
+/* Editing affordances appear only in edit mode, so the locked view stays calm. */
+.editing .node{cursor:grab}
+.editing .node.dragging{cursor:grabbing;box-shadow:var(--shadow-lg);z-index:20}
+.editing .node .node-head{cursor:inherit}
+.port{
+  position:absolute;right:-7px;top:50%;margin-top:-7px;width:14px;height:14px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.18);
+  opacity:0;transform:scale(.6);transition:opacity .14s,transform .14s;cursor:crosshair;z-index:6;
+}
+.editing .node:hover .port,.editing .node.selected .port{opacity:1;transform:scale(1)}
+.port:hover{background:var(--accent)}
+.node.context-target{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-ring)}
+.node.link-target{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-ring),var(--shadow-md)}
+.edge-ghost{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:5 4;opacity:.9}
+.pill-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill-btn.on:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+/* A quiet band so the mode is obvious without a banner. */
+.editing #canvas::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  box-shadow:inset 0 0 0 2px var(--accent-ring);border-radius:inherit;
+}
+/* Nodes the run produced read as the record: solid, filled. Nodes the user
+   added are visibly their own: dashed edge, tinted, with a corner marker. */
+.node[data-origin="user"]{
+  border-style:dashed;border-color:var(--ink-3);
+  background:linear-gradient(0deg,var(--accent-soft),var(--accent-soft)),var(--surface);
+}
+.node[data-origin="user"]::after{
+  content:"";position:absolute;top:-1px;right:-1px;width:0;height:0;
+  border-top:13px solid var(--ink-3);border-left:13px solid transparent;
+  border-top-right-radius:var(--radius);opacity:.5;
+}
+.node[data-origin="user"].selected{border-color:var(--accent);border-style:solid}
+.node[data-origin="user"] .node-type-tag::after{content:" · yours";opacity:.8}
 @keyframes nodepulse{0%{box-shadow:0 0 0 0 var(--accent-ring),var(--shadow-sm)}40%{box-shadow:0 0 0 8px var(--accent-ring),var(--shadow-md)}100%{box-shadow:0 0 0 0 transparent,var(--shadow-sm)}}
-.node-head{display:flex;align-items:center;gap:9px;padding:11px 12px 7px;cursor:grab}
-.node.dragging .node-head{cursor:grabbing}
+.node-head{display:flex;align-items:center;gap:9px;padding:11px 12px 7px}
+.node{cursor:pointer}
 .node-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--ink-3);position:relative}
 .node-type-tag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
 .node-title{font-weight:700;font-size:13.5px;color:var(--ink);line-height:1.3;padding:0 12px}
@@ -344,13 +381,20 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .pill-btn:hover{background:var(--surface-2);color:var(--ink)}
 .pill-btn svg{width:15px;height:15px}
 
-.cmdbar{left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,calc(100% - 180px));z-index:28}
+/* The bottom row holds three overlays. Their widths change (Tidy was added,
+   the minimap hides when the canvas is narrow), so the command bar is inset
+   by whatever the other two actually measure rather than a guessed gap. */
+.cmdbar{left:calc(var(--bl,300px) + 20px);right:calc(var(--br,204px) + 20px);
+  bottom:18px;transform:none;width:auto;max-width:560px;margin-inline:auto;z-index:28}
+.minimap[hidden]{display:none}
 .cmd-ctx{display:flex;gap:6px;margin:0 0 7px 4px;flex-wrap:wrap}
 .ctx-chip{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 9px;box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:6px}
 .ctx-chip .x{color:var(--ink-3);font-weight:700}
 .cmd-wrap{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 16px;box-shadow:var(--shadow-md)}
 .cmd-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
-.cmd-wrap .plus{color:var(--ink-3);flex:0 0 auto}
+.cmd-wrap .plus-btn{display:grid;place-items:center;width:26px;height:26px;flex:0 0 auto;padding:0;
+  background:none;border:0;border-radius:7px;color:var(--ink-3);cursor:pointer;transition:background .14s,color .14s}
+.cmd-wrap .plus-btn:hover{background:var(--surface-2);color:var(--accent)}
 .cmd-wrap input{flex:1;border:0;background:transparent;font:inherit;color:var(--ink);padding:5px 0}
 .cmd-wrap input::placeholder{color:var(--ink-3)}
 .cmd-wrap input:focus{outline:none}
@@ -491,8 +535,67 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .modal-body{padding:4px 22px 8px}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px 20px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--surface) 24%)}
 .field{margin-bottom:14px}
+.section .field:last-child{margin-bottom:0}
 .field label.flab{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
 .field .fval{font-size:13.5px;color:var(--ink)}
+.node-form input,.node-form textarea,.node-form select,
+.modal-body .field input,.modal-body .field textarea,.modal-body .field select{
+  width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--ink);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+  transition:border-color .14s,box-shadow .14s;
+}
+.node-form input:focus,.node-form textarea:focus,.node-form select:focus,
+.modal-body .field input:focus,.modal-body .field textarea:focus,.modal-body .field select:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);
+}
+.node-form input,.node-form textarea,.modal-body .field input,.modal-body .field textarea{min-height:40px}
+.node-form textarea,.modal-body .field textarea{resize:vertical;line-height:1.5;min-height:76px}
+.node-form select,.modal-body .field select{
+  appearance:none;-webkit-appearance:none;min-height:40px;line-height:1.5;
+  padding-right:34px;cursor:pointer;
+  background-color:var(--surface-2);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808a9b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:right 11px center;background-size:14px;
+}
+.node-form .req{font-size:9.5px;color:var(--accent);letter-spacing:.04em;margin-left:5px}
+.menu .mi.danger{color:#c0392b}
+.menu .mi.danger:hover{background:rgba(192,57,43,.1)}
+:root[data-theme="dark"] .menu .mi.danger{color:#ff8a7a}
+.cog-btn{margin-left:auto;display:grid;place-items:center;width:22px;height:22px;padding:0;
+  background:none;border:0;color:var(--ink-3);cursor:pointer;opacity:.75;transition:color .14s,opacity .14s}
+.cog-btn svg{width:16px;height:16px}
+.cog-btn:hover{color:var(--accent);opacity:1}
+.cog-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
+button.brand{width:100%;background:transparent;border:0;cursor:pointer;text-align:left}
+button.brand:hover .wordmark{color:var(--accent-strong)}
+.avatar.dev{background:var(--surface-2);color:var(--ink-3);font-size:8.5px;letter-spacing:.04em;
+  border:1px dashed var(--line)}
+.flab-action{float:right;background:none;border:0;padding:0;font:inherit;font-size:10.5px;
+  font-weight:700;letter-spacing:.04em;text-transform:none;color:var(--accent);cursor:pointer}
+.flab-action:hover{text-decoration:underline}
+.flab-action:disabled{color:var(--ink-3);cursor:default;text-decoration:none}
+.sharpen{border:1px solid var(--accent-ring);background:var(--accent-soft);border-radius:11px;padding:13px 14px;margin:-4px 0 14px}
+.sharpen-wait{font-size:13px;color:var(--ink-2)}
+.sharpen-flag{font-size:12px;font-weight:700;color:var(--st-await);margin-bottom:7px}
+.sharpen-q{font-size:13.5px;line-height:1.55;color:var(--ink)}
+.sharpen-list{margin:9px 0 0;padding-left:17px;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.sharpen-sub{margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.45}
+.sharpen-actions{display:flex;gap:8px;margin-top:12px}
+.empty-state{padding:28px 4px;text-align:left}
+.empty-state h3{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 8px}
+.empty-state p{font-size:13.5px;line-height:1.6;color:var(--ink-2);margin:0 0 18px;max-width:52ch}
+.preview-empty{padding:26px 10px;text-align:center;font-size:12.5px;color:var(--ink-3)}
+.link-node{background:none;border:0;padding:0;font:inherit;color:var(--accent);cursor:pointer;text-align:left}
+.link-node:hover{text-decoration:underline}
+.bullets li .rel-tag{margin-left:8px}
+.prose p.muted{color:var(--ink-3)}
+.ec-link{margin-top:7px;font-size:12px}
+.ec-link a{color:var(--accent);text-decoration:none;word-break:break-all}
+.ec-link a:hover{text-decoration:underline}
+.form-error{margin-top:4px;font-size:12.5px;color:#c0392b;font-weight:600}
+:root[data-theme="dark"] .form-error{color:#ff8a7a}
+.btn.danger{background:#c0392b;border-color:#c0392b;color:#fff}
+.btn.danger:hover{background:#a93226;border-color:#a93226}
 .review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--surface-2)}
 .budget-bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:7px}
 .budget-bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
@@ -507,10 +610,15 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .approve .atext b{font-weight:700}
 
 /* menu (dropdown) */
-.menu{position:absolute;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;animation:pop .14s ease}
+@keyframes menupop{from{opacity:0}to{opacity:1}}
+.menu{position:fixed;z-index:120;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px;min-width:216px;transform-origin:top left;animation:menupop .12s cubic-bezier(.2,.8,.3,1)}
+@media (prefers-reduced-motion:reduce){.menu{animation:none}}
 .menu .mi{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:8px;border:0;background:transparent;font-size:13px;font-weight:600;color:var(--ink);text-align:left}
 .menu .mi:hover{background:var(--surface-2)}
 .menu .mi .mi-ico{width:16px;height:16px;color:var(--ink-3);flex:0 0 auto}
+.menu .mi-project{gap:10px}
+.menu .mi-project .mi-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .mi-project .mi-run{flex:0 0 auto;margin-left:14px;font-size:11.5px;font-weight:600;color:var(--ink-3)}
 .menu .mi[aria-current="true"]{color:var(--accent-strong)}
 .menu .mi[aria-current="true"] .mi-ico{color:var(--accent)}
 .menu .mi .mi-sub{font-size:11px;color:var(--ink-3);font-weight:500}
@@ -688,7 +796,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 
   <!-- ============================ SIDEBAR ============================ -->
   <aside class="sidebar" id="sidebar">
-    <div class="brand" aria-label="Relay">
+    <button class="brand" id="brand" type="button" aria-label="Relay on GitHub" title="Open the source on GitHub">
       <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
         <path d="M11 20 L27.5 11" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
         <path d="M11 20 L19 30.5" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
@@ -697,7 +805,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
         <circle cx="11" cy="20" r="5.6" fill="var(--accent)"/>
       </svg>
       <span class="wordmark">relay</span>
-    </div>
+    </button>
 
     <div class="rail-head">
       <h2>Projects</h2>
@@ -715,7 +823,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
       <div class="foot-row" id="authRow" role="button" tabindex="0" title="Sign in with GitHub">
         <span class="avatar" id="authAvatar">?</span>
         <span id="authName">Not signed in</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto" title="Settings"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        <button class="cog-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+          <svg viewBox="-2 -2 28 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        </button>
       </div>
     </div>
   </aside>
@@ -743,10 +853,6 @@ button{font-family:inherit;color:inherit;cursor:pointer}
       </button>
 
       <div class="top-actions">
-        <button class="btn" id="addNode" aria-haspopup="menu">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          <span class="btn-label">Add node</span>
-        </button>
         <button class="btn primary" id="runBtn">
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z"/></svg>
           <span class="btn-label">Run</span>
@@ -756,6 +862,7 @@ button{font-family:inherit;color:inherit;cursor:pointer}
           <span class="btn-label">Report</span>
         </button>
         <button class="icon-btn" id="shareBtn" title="Share" aria-label="Share" style="width:36px;height:36px">
+        <button class="icon-btn" id="shareBtn" title="Export this project" aria-label="Export this project" style="width:36px;height:36px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
         </button>
       </div>
@@ -788,13 +895,23 @@ button{font-family:inherit;color:inherit;cursor:pointer}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>
             Fit
           </button>
+          <button class="pill-btn" id="editBtn" title="Edit the diagram (E)" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17v2h2l9-9-2-2-9 9zM15 6l3 3M12 20h8"/></svg>
+            <span id="editBtnLabel">Edit</span>
+          </button>
+          <button class="pill-btn" id="tidyBtn" title="Arrange the graph left to right (T)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6M3 12h6M3 18h6M15 4h6M15 12h6M15 20h6M9 6l6-2M9 12h6M9 18l6 2"/></svg>
+            Tidy
+          </button>
         </div>
 
         <div class="overlay cmdbar">
           <div class="cmd-ctx" id="cmdCtx"></div>
           <div class="cmd-wrap">
-            <svg class="plus" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            <input id="cmdInput" placeholder="Ask or add evidence…" autocomplete="off" aria-label="Command">
+            <button class="plus-btn" id="cmdPlus" title="Add a node" aria-label="Add a node" aria-haspopup="menu">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <input id="cmdInput" placeholder="What is this project asking?" autocomplete="off" aria-label="This project's research question">
             <button class="send-btn" id="cmdSend" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             </button>
@@ -817,6 +934,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
           </div>
           <span class="status-chip" id="paneStatus" data-st="planned"><span class="glyph">○</span>Planned</span>
           <div class="pane-ctl">
+            <button class="icon-btn" id="paneDelete" title="Delete this node (Del)" aria-label="Delete node" style="width:32px;height:32px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5"/></svg>
+            </button>
             <button class="icon-btn" id="paneMax" title="Maximize" aria-label="Maximize pane" style="width:32px;height:32px">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
             </button>
@@ -879,66 +999,10 @@ const TYPE_LABEL={question:"Question",source:"Evidence",hypothesis:"Hypothesis",
 const REL_LABEL={uses:"uses",tests:"tests",produced:"produced",supports:"supports",contradicts:"contradicts"};
 
 /* ============================ chart datasets ============================= */
-const CHART_DATA={
-  verified:{
-    measured:true, tag:"NDM-1 · verified sample",
-    enrichment:{
-      title:"Enrichment vs. screening depth",
-      sub:"Held-out · scaffold split · synthetic fixture",
-      xlabel:"Top fraction screened (%)", ylabel:"Enrichment factor (×)",
-      xmax:100,ymax:12, xticks:[0,25,50,75,100], yticks:[0,3,6,9,12],
-      x:[1,2,5,10,20,35,50,75,100],
-      proposed:[11.3,10.0,7.2,5.0,3.1,2.0,1.6,1.2,1.0],
-      band:[1.6,1.4,1.0,0.8,0.5,0.4,0.3,0.2,0.1],
-      baseline:[1.05,1.04,1.03,1.03,1.02,1.01,1.01,1.0,1.0]
-    },
-    candidates:{
-      title:"Top-ranked candidates", sub:"Predicted P(inhibits) · random-forest",
-      xmax:1, xticks:[0,.2,.4,.6,.8,1], family:true,
-      rows:[
-        {id:"C-014",score:.82,err:.07,family:"thiol-carboxylate"},
-        {id:"C-038",score:.63,err:.06,family:"hydroxamate"},
-        {id:"C-092",score:.47,err:.08,family:"thiol-carboxylate"},
-        {id:"C-105",score:.29,err:.05,family:"bis-thiol"},
-        {id:"C-121",score:.22,err:.06,family:"hydroxamate"}
-      ]
-    },
-    stats:[
-      {val:"0.75",lab:"ROC-AUC",sub:"held-out, scaffold split"},
-      {val:"11.3×",lab:"Enrichment @ top 1%",sub:"7.2× @ top 5%"},
-      {val:"1.05×",lab:"Random control",sub:"y-scramble AUC 0.52"}
-    ]
-  },
-  illustrative:{
-    measured:false, tag:"Illustrative placeholders",
-    enrichment:{
-      title:"Enrichment vs. screening budget",
-      sub:"Illustrative shape — not a measured result",
-      xlabel:"Compounds screened", ylabel:"Enrichment (×)",
-      xmax:210,ymax:8, xticks:[0,50,100,150,200], yticks:[0,2,4,6,8],
-      x:[0,25,50,70,90,110,130,150,170,190,210],
-      proposed:[1,1.8,2.3,2.85,3.35,3.8,4.2,4.6,5.0,5.3,5.6],
-      band:[.3,.4,.45,.5,.55,.6,.62,.64,.66,.68,.7],
-      baseline:[1,1.1,1.15,1.25,1.35,1.45,1.6,1.8,2.0,2.15,2.3]
-    },
-    candidates:{
-      title:"Candidate scores", sub:"Illustrative placeholder values",
-      xmax:1, xticks:[0,.2,.4,.6,.8,1], family:false,
-      rows:[
-        {id:"C-014",score:.82,err:.09,family:"—"},
-        {id:"C-038",score:.61,err:.08,family:"—"},
-        {id:"C-092",score:.44,err:.10,family:"—"},
-        {id:"C-105",score:.27,err:.07,family:"—"},
-        {id:"C-121",score:.20,err:.07,family:"—"}
-      ]
-    },
-    stats:[
-      {val:"~0.7",lab:"ROC-AUC",sub:"illustrative"},
-      {val:"~5×",lab:"Enrichment",sub:"illustrative"},
-      {val:"—",lab:"Controls",sub:"run to populate"}
-    ]
-  }
-};
+/* No fabricated results. A result exists only after a run produces one;
+   until then the interface says there is nothing rather than showing
+   numbers that were typed in by hand. */
+const CHART_DATA={live:null};
 
 /* ============================ project models ============================= */
 function P(id,type,title,summary,status,x,y,meta){return {id,type,title,summary,status,x,y,meta:meta||{}};}
@@ -1002,11 +1066,9 @@ const BASE={
         approval:"Required before run."
       }),
       P("rank","result","Candidate ranking","5 candidates advanced","done",830,520,{isRank:true,
-        interp:"Five candidates clear the advancement threshold; top two are thiol-carboxylate / hydroxamate chelators.",
         provenance:{run:"r-03",data:"fixture v2",code:"medlab@a1f3",params:"top-k=5"}
       }),
       P("res","result","Results · 03","Enrichment + ranked scores","done",1100,250,{
-        interp:"The diversity-aware screen reaches 11.3× enrichment at the top 1% of the library and holds 7.2× at 5%, against a flat random control (1.05×). y-scramble collapses ROC-AUC to 0.52 — the signal is not an artefact of the split. Practically: about an order of magnitude fewer assays per confirmed hit.",
         provenance:{run:"r-03",data:"synthetic fixture v2 (scaffold split)",code:"medlab@a1f3",params:"RF-400 · top-k=5",approvals:"approved · r-03"}
       }),
       P("next","next","Next experiment","Choose a test","planned",1380,140,{
@@ -1028,36 +1090,9 @@ const BASE={
       {from:"exp",to:"res",rel:"produced"},
       {from:"res",to:"next",rel:"uses"}
     ]
-  },
-  materials:{
-    id:"materials",name:"Materials stability",icon:"layers",run:"Experiment 01",primaryExp:"mexp",resultNode:"mres",
-    nodes:[
-      P("mq","question","Research question","Which barrier coating best resists thermal cycling?","done",60,280,{
-        objective:"Rank candidate barrier coatings by resistance to delamination under accelerated thermal cycling.",
-        scope:"Screening model over coating/interlayer combinations.",outcome:"Predicted cycles-to-delamination.",data:"8 internal test records.",budget:"≤ 30 tool calls"}),
-      P("mev","source","Evidence","8 sources","done",330,280,{sources:[{src:"Thermal-cycle test logs",meta:"8 records",rel:"supports",body:"Delamination onset across coating stacks."}],relevance:"Labels for the ranking model.",limitations:"Small sample; wide uncertainty."}),
-      P("mh","hypothesis","Hypothesis","An alumina interlayer slows delamination","done",600,280,{statement:"Adding an alumina interlayer raises cycles-to-delamination by relaxing interfacial stress.",predictions:["Alumina stacks rank above bare coatings."],supports:["Interfacial-stress literature"],contradict:["Thickness may reintroduce cracking"],uncertainty:"Moderate.",alt:"Graded interlayer."}),
-      P("mexp","experiment","Experiment 01","Accelerated thermal cycling","planned",870,280,{tests:[{name:"Rank on composition",sel:false,why:"Baseline."},{name:"Stress-aware rank",sel:true,why:"Adds interfacial-stress features."}],method:"Gradient-boosted rank on composition + stress features.",inputs:"8 labelled stacks.",baseline:"Random.",controls:"y-scramble.",params:"top-k=3",cost:"~20 calls",approval:"Required."}),
-      P("mres","result","Results · 01","Delamination onset","done",1140,280,{interp:"Stress-aware ranking separates alumina stacks from bare coatings on predicted cycles-to-delamination.",provenance:{run:"m-01",data:"records v1",code:"medlab@a1f3",params:"GBM · top-k=3",approvals:"approved · m-01"}})
-    ],
-    edges:[{from:"mq",to:"mev",rel:"uses"},{from:"mev",to:"mh",rel:"supports"},{from:"mh",to:"mexp",rel:"tests"},{from:"mexp",to:"mres",rel:"produced"}]
-  },
-  solar:{
-    id:"solar",name:"Solar performance",icon:"sun",run:"Experiment 02",primaryExp:"sexp",resultNode:"sres",
-    nodes:[
-      P("sq","question","Research question","What limits tandem-cell efficiency under load?","done",50,300,{objective:"Identify the dominant loss mechanism limiting tandem-cell efficiency under operating load.",scope:"Screen over interface + bandgap variables.",outcome:"Predicted efficiency contribution per factor.",data:"15 device measurements.",budget:"≤ 35 tool calls"}),
-      P("sev","source","Evidence","15 sources","done",320,300,{sources:[{src:"Device I–V sweeps",meta:"15 devices",rel:"supports",body:"Efficiency vs bandgap and interface treatment."}],relevance:"Labels for the loss-attribution model.",limitations:"Operating-condition drift between batches."}),
-      P("shA","hypothesis","Hypothesis A","Interface recombination dominates","done",590,190,{statement:"Carrier recombination at the sub-cell interface is the primary efficiency loss.",predictions:["Passivated interfaces rank highest."],supports:["Recombination literature"],contradict:["Bandgap mismatch may confound"],uncertainty:"Moderate.",alt:"Bandgap mismatch."}),
-      P("shB","hypothesis","Hypothesis B","Bandgap mismatch limits current","done",590,420,{statement:"Sub-cell bandgap mismatch limits short-circuit current more than recombination does.",predictions:["Matched-bandgap devices lead on Jsc."],supports:["Detailed-balance arguments"],contradict:["Interface quality varies across the set"],uncertainty:"Moderate.",alt:"Interface recombination."}),
-      P("sexp","experiment","Experiment 02","Bandgap sweep","planned",860,300,{tests:[{name:"Attribute to interface",sel:false,why:"Interface-feature model."},{name:"Bandgap sweep",sel:true,why:"Varies sub-cell bandgap directly."}],method:"Regression attribution over device features.",inputs:"15 labelled devices.",baseline:"Mean predictor.",controls:"y-scramble.",params:"top-k=4",cost:"~24 calls",approval:"Required."}),
-      P("sres","result","Results · 02","Efficiency vs bandgap","done",1130,300,{interp:"A bandgap sweep accounts for more of the efficiency variance than interface features alone in this set.",provenance:{run:"s-02",data:"devices v1",code:"medlab@a1f3",params:"attrib · top-k=4",approvals:"approved · s-02"}})
-    ],
-    edges:[{from:"sq",to:"sev",rel:"uses"},{from:"sev",to:"shA",rel:"supports"},{from:"sev",to:"shB",rel:"contradicts"},{from:"shA",to:"sexp",rel:"tests"},{from:"shB",to:"sexp",rel:"tests"},{from:"sexp",to:"sres",rel:"produced"}]
-}};
-/* Which projects the sidebar shows, in order. Fixed on a static host (the three
-   bundled demos); on a server it is whatever the signed-in account owns, so it
-   is rebuilt by the loader rather than declared once. */
-let PROJECT_ORDER=["ndm1","materials","solar"];
+  }
+};
+let PROJECT_ORDER=["ndm1"];   // user projects append; deleted ones drop out
 const DEMO_PID="ndm1";   // the one project an anonymous visitor may view
 const PROJECT_ICON={
   flask:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>',
@@ -1068,18 +1103,22 @@ const PROJECT_ICON={
 /* ================================ state ================================= */
 let state={
   project:"ndm1",
-  dataMode:"verified",
   theme:null,            // null = follow system
   selection:null,
   pane:{open:false,maximized:false,widthPx:null},
   projects:{},           // runtime clones
   view:{},               // {pid:{tx,ty,scale}}
   previews:{},           // {pid:{nid:{open,x,y,w,h,tab}}}
-  run:{active:false,log:[],mode:null,id:3,timers:[],abort:null}
+  run:{active:false,log:[],mode:null,id:3,timers:[],abort:null},
+  deletedProjects:[],
+  question:null,
+  opts:{aid:null,autoTidy:false},   // user-adjustable run options
+  editing:false        // locked by default: structure is read-only and auto-spaced
 };
 function curProj(){return state.projects[state.project];}
 function nodeById(id){return curProj().nodes.find(n=>n.id===id);}
-function curData(){return CHART_DATA[state.dataMode];}
+function curData(){return CHART_DATA.live;}
+function hasResults(){return !!CHART_DATA.live;}
 
 /* ============================= persistence ==============================
    Three modes, decided once at boot by whether /api/projects answers and
@@ -1116,7 +1155,7 @@ function clone(o){ return JSON.parse(JSON.stringify(o)); }
 /* --- mode: static ----------------------------------------------------- */
 function loadStatic(){
   state.projects={};
-  PROJECT_ORDER=["ndm1","materials","solar"];
+  PROJECT_ORDER=["ndm1"];
   for(const id of PROJECT_ORDER) state.projects[id]=clone(BASE[id]);
   applyLocalPrefs(readLocal(),true);
 }
@@ -1212,6 +1251,9 @@ function applyLocalPrefs(p,withGraph){
   if(p.project && state.projects[p.project]) state.project=p.project;
   if(p.view) state.view=p.view;
   if(p.previews) state.previews=p.previews;
+  if(typeof p.editing==="boolean") state.editing=p.editing;
+  if(typeof p.question==="string") state.question=p.question;
+  if(p.opts) state.opts=Object.assign(state.opts,p.opts);
   // Graph edits only come from localStorage on a static host. On a server the
   // document is the store of record, and replaying a stale local diff over it
   // would resurrect nodes the user deleted on another device.
@@ -1223,6 +1265,15 @@ function applyLocalPrefs(p,withGraph){
   }
   if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
   if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
+  // Projects the user made are stored whole, since there is no base to diff.
+  if(p.userProjects){
+    for(const up of p.userProjects){ state.projects[up.id]=up; if(!PROJECT_ORDER.includes(up.id)) PROJECT_ORDER.push(up.id); }
+  }
+  if(Array.isArray(p.deletedProjects)){
+    for(const id of p.deletedProjects){ delete state.projects[id]; PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id); }
+    state.deletedProjects=p.deletedProjects.slice();
+  }
+  if(!state.projects[state.project]) state.project=PROJECT_ORDER[0];
 }
 /* Every mutation in the app already calls savePersist(), so this is the single
    place that decides where a change goes. Device preferences always go to
@@ -1284,11 +1335,15 @@ function saveLocalPrefs(){
       }
       const payload={
         dataMode:state.dataMode,theme:state.theme,project:state.project,
-        view:state.view,previews:state.previews
+        view:state.view,previews:state.previews,
+        editing:state.editing,question:state.question,opts:state.opts
       };
-      // The graph diff is only meaningful on a static host. With a server, the
-      // document is authoritative and this would just be a stale second copy.
-      if(ACCOUNT.mode==="static") Object.assign(payload,{pos,extraNodes,extraEdges});
+      // The graph diff and the whole-project copies are only meaningful on a
+      // static host. With a server the document is authoritative, and writing
+      // a second copy here would leave two stores free to disagree.
+      if(ACCOUNT.mode==="static") Object.assign(payload,{pos,extraNodes,extraEdges,
+        userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
+        deletedProjects:state.deletedProjects||[]});
       localStorage.setItem(LSK,JSON.stringify(payload));
     }catch(e){/* storage may be unavailable; ignore */}
   },260);
@@ -1330,7 +1385,12 @@ function applyTransform(smooth){
 function screenToWorld(sx,sy){ const v=view(); return {x:(sx-v.tx)/v.scale, y:(sy-v.ty)/v.scale}; }
 function canvasRect(){ return el.canvas.getBoundingClientRect(); }
 
+let zoomSettle=null;
 function zoomBy(factor,cx,cy){
+  // Mark the gesture so the compositor can cheat, then clear it so the
+  // layer re-rasterises crisply at the final scale.
+  el.canvas.classList.add("zooming");
+  clearTimeout(zoomSettle); zoomSettle=setTimeout(()=>el.canvas.classList.remove("zooming"),220);
   const v=view(); const ns=clamp(v.scale*factor,0.3,2.2);
   const r=canvasRect(); if(cx==null){cx=r.width/2;} if(cy==null){cy=r.height/2;}
   const wx=(cx-v.tx)/v.scale, wy=(cy-v.ty)/v.scale;
@@ -1365,6 +1425,7 @@ function renderProjects(){
     b.className="project"; b.setAttribute("aria-current",String(id===state.project));
     b.innerHTML=`<svg class="pj-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]||PROJECT_ICON.flask}</svg><span class="pj-name">${esc(p.name)}</span>`;
     b.addEventListener("click",()=>switchProject(id));
+    b.addEventListener("contextmenu",ev=>projectContextMenu(ev,id));
     el.projectList.appendChild(b);
   }
 }
@@ -1372,7 +1433,7 @@ function switchProject(id){
   if(!state.projects[id]) return;
   closePane(true);
   state.project=id;
-  renderProjects(); renderCrumb(); renderGraph();
+  renderProjects(); renderCrumb(); renderGraph(); updateProvenance(); syncQuestionBar();
   if(!state.view[id]) fit(false); else applyTransform(false);
   savePersist();
   closeMenus(); el.app.classList.remove("nav-open");
@@ -1385,6 +1446,33 @@ function renderCrumb(){
 
 /* ============================ render: graph ============================ */
 let nodeEls={};
+/* A card used to say the same thing three times: a coloured dot, a type tag,
+   and a title that just repeated the type ("QUESTION / Research question").
+   The tag carries the type, so a generic title is dropped and the substance
+   is promoted into its place.
+
+   Summaries are derived, never written by hand. One node claimed "8 sources"
+   while holding a single record — a card must not be able to contradict the
+   data behind it. */
+const GENERIC_TITLE=/^(research\s+)?(question|evidence|sources?|hypothesis|experiment|results?|next experiment|note)s?$/i;
+function nodeSubtitle(n){
+  if(n.type==="source"){
+    const src=(n.meta&&n.meta.sources)||[];
+    if(src.length===1) return src[0].meta ? `${src[0].src} · ${src[0].meta}` : src[0].src;
+    if(src.length>1)   return `${src.length} sources · ${src[0].src} and ${src.length-1} more`;
+  }
+  return n.summary||"";
+}
+function nodeHeading(n){
+  const t=(n.title||"").trim(), sub=nodeSubtitle(n);
+  if(n.type==="source"){
+    const src=(n.meta&&n.meta.sources)||[];
+    if(src.length===1) return {title:src[0].src, sub:src[0].meta||""};
+    if(src.length>1)   return {title:`${src.length} sources`, sub:`${src[0].src} and ${src.length-1} more`};
+  }
+  if(GENERIC_TITLE.test(t) && sub) return {title:sub, sub:""};
+  return {title:t, sub};
+}
 function statusChipHTML(st){const s=STATUS[st]||STATUS.planned;return `<span class="status-chip" data-st="${st}"><span class="glyph">${s.g}</span>${s.l}</span>`;}
 function renderGraph(){
   const p=curProj();
@@ -1393,17 +1481,21 @@ function renderGraph(){
   for(const n of p.nodes){
     const d=document.createElement("div");
     d.className="node"; d.dataset.id=n.id; d.dataset.type=n.type;
+    // Generated by a run, or added by hand: styled differently so the record
+    // and the user's own annotations are never mistaken for each other.
+    d.dataset.origin = n.origin==="user" ? "user" : "generated";
     d.style.left=n.x+"px"; d.style.top=n.y+"px";
     d.tabIndex=0; d.setAttribute("role","button");
-    d.setAttribute("aria-label",`${TYPE_LABEL[n.type]}: ${n.title}`);
+    d.setAttribute("aria-label",`${TYPE_LABEL[n.type]}: ${nodeHeading(n).title}`);
     const showPreview = n.type==="result";
     d.innerHTML=`
       <div class="node-head">
         <span class="node-dot"></span>
         <span class="node-type-tag">${esc(TYPE_LABEL[n.type])}</span>
       </div>
-      <div class="node-title">${esc(n.title)}</div>
-      ${n.summary?`<div class="node-sum">${esc(n.summary)}</div>`:""}
+      ${(()=>{const h=nodeHeading(n);return `<div class="node-title">${esc(h.title)}</div>`+
+        (h.sub?`<div class="node-sum">${esc(h.sub)}</div>`:"");})()}
+      ${state.editing?`<span class="port" title="Drag onto another node to connect"></span>`:""}
       <div class="node-foot">
         ${statusChipHTML(n.status)}
         ${showPreview?`<button class="link-btn" data-act="preview">Preview</button>`:""}
@@ -1451,32 +1543,64 @@ function renderEdges(){
   $$(".edge-g",el.edges).forEach(grp=>{
     grp.querySelector(".edge-hit").addEventListener("mouseenter",()=>grp.classList.add("show"));
     grp.querySelector(".edge-hit").addEventListener("mouseleave",()=>{ const sel=state.selection; const act=sel&&(grp.dataset.from===sel||grp.dataset.to===sel); if(!act)grp.classList.remove("show"); });
+    grp.addEventListener("contextmenu",ev=>{
+      const e=curProj().edges.find(x=>x.from===grp.dataset.from&&x.to===grp.dataset.to);
+      if(e) edgeContextMenu(ev,e);
+    });
   });
   scheduleMinimap();
 }
 
 /* ======================== node interactions =========================== */
+/* Two modes, because the two jobs want opposite things.
+   Locked (the default) is for reading and running: positions are derived by
+   layoutGraph, nothing moves, nothing can be rewired by accident.
+   Editing is for arranging: nodes drag, and a port on each node's right edge
+   lets you connect it somewhere else. Locking keeps whatever you arranged
+   rather than snapping it back. */
+function setEditing(on){
+  state.editing=!!on;
+  el.app.classList.toggle("editing",state.editing);
+  const b=$("#editBtn"); b.setAttribute("aria-pressed",String(state.editing));
+  b.classList.toggle("on",state.editing);
+  $("#editBtnLabel").textContent=state.editing?"Lock":"Edit";
+  b.title=state.editing?"Lock the diagram (E)":"Edit the diagram (E)";
+  renderGraph(); savePersist();
+  toast(state.editing
+    ? "Editing — drag nodes, or drag a node's right edge onto another to connect them"
+    : "Locked — the diagram is fixed");
+}
+
 function wireNode(d,n){
-  let start=null,dragging=false,canDrag=false,moved=false;
+  let start=null,dragging=false,canDrag=false;
   d.addEventListener("pointerdown",ev=>{
     if(ev.button!==0) return;
     const onLink=ev.target.closest("[data-act]");
     if(onLink){ ev.stopPropagation(); if(onLink.dataset.act==="preview"){ togglePreview(n.id,true); } return; }
-    canDrag = !!ev.target.closest(".node-head");
-    start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false; moved=false;
-    // Capture only for a real drag. Capturing on a press in the title would
-    // retarget the pointer stream to the node and stop the browser extending
-    // a text selection, which is the one thing that text is now for.
-    if(canDrag) d.setPointerCapture(ev.pointerId);
-    ev.stopPropagation();
+    if(ev.target.closest(".port")){ beginLink(ev,n); return; }
+    ev.stopPropagation();          // don't start a canvas pan from the node
+    if(state.editing){
+      // A press on the title or summary is a press on text. Capturing the
+      // pointer there would retarget the stream to the node and stop the
+      // browser extending a selection, which is the one thing that text is
+      // for -- so that press selects, and everything else drags.
+      canDrag = !ev.target.closest(".node-title,.node-sum");
+      if(canDrag){
+        start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false;
+        try{ d.setPointerCapture(ev.pointerId); }catch(e){}   // no capture for synthetic pointers
+      }
+    } else {
+      canDrag=false;
+      selectNode(n.id);
+    }
   });
   d.addEventListener("pointermove",ev=>{
     if(!start) return;
     const dx=ev.clientX-start.x, dy=ev.clientY-start.y;
-    if(!moved && Math.hypot(dx,dy)>4){ moved=true; if(canDrag){dragging=true; d.classList.add("dragging");} }
+    if(!dragging && Math.hypot(dx,dy)>4){ dragging=true; d.classList.add("dragging"); }
     if(dragging){
       const v=view();
-      n.x=start.nx+dx/v.scale; n.y=start.ny+dy/v.scale;
+      n.x=Math.round(start.nx+dx/v.scale); n.y=Math.round(start.ny+dy/v.scale);
       d.style.left=n.x+"px"; d.style.top=n.y+"px";
       renderEdges();
     }
@@ -1485,16 +1609,17 @@ function wireNode(d,n){
     if(!start) return;
     if(canDrag){ try{d.releasePointerCapture(ev.pointerId);}catch(e){} }
     if(dragging){ d.classList.remove("dragging"); savePersist(); }
-    else if(!moved){ selectNode(n.id); }
-    start=null;dragging=false;
+    else selectNode(n.id);
+    start=null; dragging=false;
   });
+  d.addEventListener("contextmenu",ev=>nodeContextMenu(ev,n));
   d.addEventListener("keydown",ev=>{
     if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); selectNode(n.id); }
-    else if(ev.key.startsWith("Arrow")){
-      ev.preventDefault(); const step=ev.shiftKey?40:12;
-      if(ev.key==="ArrowUp")n.y-=step; if(ev.key==="ArrowDown")n.y+=step;
-      if(ev.key==="ArrowLeft")n.x-=step; if(ev.key==="ArrowRight")n.x+=step;
-      d.style.left=n.x+"px"; d.style.top=n.y+"px"; renderEdges(); savePersist();
+    else if(ev.key==="Delete"||ev.key==="Backspace"){ ev.preventDefault(); deleteNode(n.id); }
+    // Keyboard equivalent of the context menu.
+    else if(ev.key==="ContextMenu"||(ev.shiftKey&&ev.key==="F10")){
+      const r=d.getBoundingClientRect();
+      nodeContextMenu(Object.assign(ev,{clientX:r.left+24,clientY:r.top+24}),n);
     }
   });
 }
@@ -1534,8 +1659,23 @@ function wireNode(d,n){
 $("#zoomIn").addEventListener("click",()=>zoomBy(1.18));
 $("#zoomOut").addEventListener("click",()=>zoomBy(1/1.18));
 $("#fitBtn").addEventListener("click",()=>fit(true));
+$("#tidyBtn").addEventListener("click",()=>tidy());
+$("#editBtn").addEventListener("click",()=>setEditing(!state.editing));
+el.canvas.addEventListener("contextmenu",canvasContextMenu);
 
 /* ============================== minimap =============================== */
+/* Keep the bottom overlays from colliding. The minimap is the first thing to
+   go when the canvas gets narrow, because the command bar has to stay usable. */
+function layoutOverlays(){
+  const z=document.querySelector(".zoomctl"), mm=document.querySelector(".minimap");
+  const w=el.canvas.clientWidth;
+  if(mm) mm.hidden = w < 880;
+  el.canvas.style.setProperty("--bl",(z?z.offsetWidth:0)+"px");
+  el.canvas.style.setProperty("--br",(mm&&!mm.hidden?mm.offsetWidth:0)+"px");
+}
+addEventListener("resize",layoutOverlays);
+new ResizeObserver(layoutOverlays).observe(el.canvas);
+
 let mmT=null; function scheduleMinimap(){ if(mmT)cancelAnimationFrame(mmT); mmT=requestAnimationFrame(renderMinimap); }
 function renderMinimap(){
   const b=graphBBox(); const pad=40;
@@ -1605,6 +1745,7 @@ function revealNode(id){
   if(need){ v.tx=ntx; v.ty=nty; applyTransform(true); savePersist(); }
 }
 $("#paneClose").addEventListener("click",()=>{ const s=state.selection; closePane(); if(s&&nodeEls[s])nodeEls[s].focus(); });
+$("#paneDelete").addEventListener("click",()=>{ if(state.selection) deleteNode(state.selection); });
 $("#paneMax").addEventListener("click",toggleMax);
 function toggleMax(){
   state.pane.maximized=!state.pane.maximized;
@@ -1636,8 +1777,10 @@ function toggleMax(){
 function renderPaneHeader(n){
   const dot=$("#paneDot");
   dot.style.background=dotColor(n.type);
+  const h=nodeHeading(n);
   $("#paneType").textContent=TYPE_LABEL[n.type];
-  $("#paneName").textContent=n.title;
+  // Never repeat the type as the name: the label above it already says it.
+  $("#paneName").textContent=h.title;
   const s=STATUS[n.status]||STATUS.planned;
   const chip=$("#paneStatus"); chip.dataset.st=n.status; chip.innerHTML=`<span class="glyph">${s.g}</span>${s.l}`;
 }
@@ -1674,44 +1817,77 @@ function paneQuestion(n){const m=n.meta;return `
   <div class="section"><div class="prose"><p>${esc(m.objective||"")}</p></div></div>
   ${sectionKV("Scope & outcome",{Scope:m.scope,"Measurable outcome":m.outcome,Constraints:m.constraints})}
   ${sectionKV("Data & budget",{Data:m.data,Budget:m.budget})}
-  ${actionRow([{id:"edit",label:"Edit question"},{id:"add-evidence",label:"Add evidence",icon:IC.plus},{id:"propose",label:"Propose hypotheses",primary:true}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"add-evidence",label:"Add evidence",icon:IC.plus},{id:"propose",label:"Add hypothesis",primary:true}])}`;}
 function paneSource(n){const m=n.meta;const cards=(m.sources||[]).map(s=>`
-  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join("");
+  <div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span><span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div>${s.url?`<div class="ec-link"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></div>`:""}</div>`).join("");
+  // What this evidence actually bears on, taken from the edges leaving it.
+  const bearing=curProj().edges.filter(e=>e.from===n.id).map(e=>({node:nodeById(e.to),rel:e.rel})).filter(x=>x.node);
+  const bearingHTML=bearing.length
+    ? `<ul class="bullets">${bearing.map(({node,rel})=>
+        `<li class="${rel==="contradicts"?"neg":"pos"}"><button class="link-node" data-goto="${node.id}">${esc(nodeHeading(node).title)}</button><span class="rel-tag ${rel}">${esc(REL_LABEL[rel]||rel)}</span></li>`).join("")}</ul>`
+    : `<div class="prose"><p class="muted">Not connected to a hypothesis yet.</p></div>`;
   return `<div class="section"><h3>Sources & records</h3>${cards}</div>
+  <div class="section"><h3>Bearing on hypotheses</h3>${bearingHTML}</div>
   ${sectionKV("Appraisal",{Relevance:m.relevance,Limitations:m.limitations})}
-  ${actionRow([{id:"open-source",label:"Open source",icon:IC.link},{id:"attach",label:"Attach file",icon:IC.plus},{id:"challenge",label:"Link or challenge a claim"}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"open-source",label:"Open source",icon:IC.link},{id:"link-claim",label:"Connect to a claim"}])}`;}
+/* Evidence shown here is read off the graph, not retyped beside it. A
+   hypothesis used to list "supporting evidence" as prose while the edge that
+   actually linked it said something else — and one line claimed 12 sources
+   next to a node holding 3. Whatever the edges say is what you see. */
+function linkedEvidence(n,rels){
+  return curProj().edges
+    .filter(e=>e.to===n.id&&rels.includes(e.rel))
+    .map(e=>({node:nodeById(e.from),rel:e.rel}))
+    .filter(x=>x.node);
+}
+function evidenceList(items,cls){
+  return items.map(({node,rel})=>
+    `<li class="${cls}"><button class="link-node" data-goto="${node.id}">${esc(nodeHeading(node).title)}</button>`
+    + `<span class="rel-tag ${rel}">${esc(REL_LABEL[rel]||rel)}</span></li>`).join("");
+}
 function paneHypothesis(n){const m=n.meta;
   const preds=(m.predictions||[]).map(p=>`<li>${esc(p)}</li>`).join("");
-  const sup=(m.supports||[]).map(p=>`<li class="pos">${esc(p)}</li>`).join("");
-  const con=(m.contradict||[]).map(p=>`<li class="neg">${esc(p)}</li>`).join("");
+  const sup=evidenceList(linkedEvidence(n,["supports","uses"]),"pos");
+  const con=evidenceList(linkedEvidence(n,["contradicts"]),"neg");
+  // meta.contradict is a caveat the author wrote, not a linked node: say so.
+  const caveats=(m.contradict||[]).map(p=>`<li class="neg">${esc(p)}</li>`).join("");
   return `<div class="section"><div class="prose"><p>${esc(m.statement||"")}</p></div></div>
   ${preds?`<div class="section"><h3>Predictions</h3><ul class="bullets">${preds}</ul></div>`:""}
-  ${sup?`<div class="section"><h3>Supporting evidence</h3><ul class="bullets">${sup}</ul></div>`:""}
-  ${con?`<div class="section"><h3>Contradictory evidence</h3><ul class="bullets">${con}</ul></div>`:""}
+  <div class="section"><h3>Linked evidence</h3>${
+    (sup||con) ? `<ul class="bullets">${sup}${con}</ul>`
+      : `<div class="prose"><p class="muted">Nothing is connected to this yet. Use “Connect to a claim”.</p></div>`}</div>
+  ${caveats?`<div class="section"><h3>Caveats</h3><ul class="bullets">${caveats}</ul></div>`:""}
   ${sectionKV("Appraisal",{Uncertainty:m.uncertainty,"Alternative":m.alt})}
-  ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"compare-alt",label:"Compare alternatives",icon:IC.compare},{id:"revise",label:"Revise (new version)"}])}`;}
+  ${actionRow([{id:"design-test",label:"Design a test",icon:IC.play,primary:true},{id:"link-claim",label:"Connect to a claim"},{id:"edit",label:"Edit"}])}`;}
 function paneExperiment(n){const m=n.meta;
   const tests=(m.tests||[]).map(t=>`<div class="evidence-card" style="${t.sel?"border-color:var(--accent);background:var(--accent-soft)":""}"><div class="ec-top"><span class="ec-src">${esc(t.name)}</span>${t.sel?`<span class="rel-tag supports">selected</span>`:""}</div><div class="ec-body">${esc(t.why)}</div></div>`).join("");
-  return `<div class="section"><h3>Proposed tests</h3>${tests}</div>
+  return `<div class="section"><h3>Proposed tests</h3><div class="prose"><p class="muted">What the planner considered for this question. The selected one is what a run executes.</p></div>${tests}</div>
   ${sectionKV("Method & inputs",{Method:m.method,Inputs:m.inputs,Baseline:m.baseline,Controls:m.controls,Parameters:m.params})}
   ${sectionKV("Cost & approval",{"Expected cost":m.cost,Approval:m.approval})}
   <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Runs act on real inputs and need approval. In a shared demo this replays a labelled trace; served from your Mac it orchestrates Omnigent.</span></div>
-  ${actionRow([{id:"compare-tests",label:"Compare tests",icon:IC.compare},{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"}])}`;}
+  ${actionRow([{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"},{id:"edit",label:"Edit"}])}`;}
 function paneNext(n){const m=n.meta;
   const tests=(m.tests||[]).map(t=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(t.name)}</span><span class="ec-meta">${esc(t.cost||"")}</span></div><div class="ec-body">${esc(t.why)}</div><div class="pane-actions" style="margin-top:9px"><button class="chip-action" data-paneact="pick-next" data-test="${esc(t.name)}">Select this test</button></div></div>`).join("");
   return `${sectionKV("After the result",{"What changed":m.changed,"Remaining uncertainty":m.uncertainty})}
   <div class="section"><h3>Candidate next tests</h3>${tests}</div>
-  ${actionRow([{id:"branch",label:"Branch investigation",icon:IC.compare},{id:"record",label:"Record decision"}])}`;}
-function paneNote(n){return `<div class="section"><div class="prose"><p>${esc(n.meta.text||n.summary||"")}</p></div></div>${actionRow([{id:"edit",label:"Edit note"},{id:"link",label:"Link to a node",icon:IC.link}])}`;}
+  ${actionRow([{id:"edit",label:"Edit"},{id:"link-claim",label:"Connect to a claim"}])}`;}
+function paneNote(n){return `<div class="section"><div class="prose"><p>${esc(n.meta.text||n.summary||"")}</p></div></div>${actionRow([{id:"edit",label:"Edit"},{id:"link-claim",label:"Connect to a claim",icon:IC.link}])}`;}
 
 /* result pane with tabs */
 function paneResult(n){
   const tab=n._tab||"plot";
   const d=curData();
+  if(!d){
+    return `<div class="empty-state">
+      <h3>No results yet</h3>
+      <p>This node holds whatever a run measures. Press <b>Run</b> to produce it — the charts, the ranked shortlist and the controls all come from that run, not from stored examples.</p>
+      ${actionRow([{id:"run-exp",label:"Approve & run",icon:IC.play,primary:true},{id:"activity",label:"Inspect activity"}])}
+    </div>`;
+  }
   const tabs=["plot","table","evidence","activity"];
   const tabLabels={plot:"Plot",table:"Table",evidence:"Evidence",activity:"Activity"};
   let inner="";
-  const isLive = state.dataMode==="live" && !!CHART_DATA.live;
+  const isLive = hasResults();
   const measuredNote = isLive
     ? `<div class="illus-pill" title="Computed by this server from the run that just finished">● Measured · ${esc(d.tag||"this run")}</div>`
     : d.measured
@@ -1726,8 +1902,8 @@ function paneResult(n){
   } else if(tab==="table"){
     inner=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px">${measuredNote}</div>${candidateTable(d)}<div style="height:20px"></div>${enrichmentTable(d)}`;
   } else if(tab==="evidence"){
-    const ev=nodeById(curProj().id==="ndm1"?"ev1":(curProj().id==="materials"?"mev":"sev"));
-    inner=(ev&&ev.meta.sources)?ev.meta.sources.map(s=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span>${s.rel?`<span class="rel-tag ${s.rel}">${esc(s.rel)}</span>`:""}<span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join(""):`<div class="callout"><span>No linked evidence on this result.</span></div>`;
+    const ev=curProj().nodes.find(x=>x.type==="source");
+    inner=(ev&&ev.meta.sources)?ev.meta.sources.map(s=>`<div class="evidence-card"><div class="ec-top"><span class="ec-src">${esc(s.src)}</span><span class="ec-meta">${esc(s.meta||"")}</span></div><div class="ec-body">${esc(s.body||"")}</div></div>`).join(""):`<div class="callout"><span>No linked evidence on this result.</span></div>`;
   } else {
     inner=activityHTML();
   }
@@ -1737,7 +1913,7 @@ function paneResult(n){
   ${inner}
   ${tab==="plot"?`<div class="section" style="margin-top:22px"><h3>Interpretation</h3><div class="prose"><p>${esc(n.meta.interp||"")}</p></div></div>
   ${sectionKV("Provenance",{"Run ID":prov.run,"Data version":prov.data,"Code revision":prov.code,Parameters:prov.params,Approvals:prov.approvals})}
-  ${actionRow([{id:"compare-runs",label:"Compare runs",icon:IC.compare},{id:"export",label:"Export",icon:IC.down},{id:"add-canvas",label:"Add chart to canvas",icon:IC.chart,primary:true}])}`:""}`;
+  ${actionRow([{id:"export",label:"Download CSV",icon:IC.down},{id:"add-canvas",label:"Add chart to canvas",icon:IC.chart,primary:true}])}`:""}`;
 }
 function activityHTML(){
   if(!state.run.log.length) return `<div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span>No run yet. Press <b>Run</b> to orchestrate the agents — events appear here as they fire.</span></div>`;
@@ -2003,21 +2179,66 @@ function wirePaneActions(n){
     const on=b.getAttribute("aria-pressed")==="true"; b.setAttribute("aria-pressed",String(!on));
     const s=b.dataset.series; $$(`[data-line="${s}"]`,el.paneBody).forEach(p=>p.style.opacity=on?"0":"1");
   }));
+  $$("[data-goto]",el.paneBody).forEach(b=>b.addEventListener("click",()=>selectNode(b.dataset.goto)));
   $$("[data-paneact]",el.paneBody).forEach(b=>b.addEventListener("click",()=>paneAction(b.dataset.paneact,n,b)));
 }
 function paneAction(act,n,btn){
   switch(act){
     case "run-exp": openRunModal(n.id); break;
-    case "design-test": toast("Drafted a test from this hypothesis"); break;
-    case "add-canvas": togglePreview(curProj().resultNode||n.id,true); toast("Chart preview added to canvas"); break;
-    case "export": toast("Exported results.csv (sample)"); break;
-    case "compare-runs": toast("Opened run comparison (r-02 vs r-03)"); break;
-    case "add-evidence": addNode("source"); break;
-    case "propose": addNode("hypothesis"); break;
-    case "pick-next": toast("Selected next test: "+(btn.dataset.test||"")); break;
     case "activity": n._tab="activity"; renderPaneBody(n); break;
+    case "add-canvas": togglePreview(curProj().resultNode||n.id,true); toast("Chart preview added to canvas"); break;
+
+    // Editing and structure: these all have real machinery behind them.
+    case "edit": openNodeForm(n.type,null,n.id); break;
+    case "add-evidence": openNodeForm("source",null,null,n.id); break;
+    case "propose": openNodeForm("hypothesis",null,null,n.id); break;
+    case "design-test": openNodeForm("experiment",null,null,n.id); break;
+    case "link-claim": linkFromNode(n); break;
+    case "pick-next": openNodeForm("experiment",{title:btn.dataset.test||""},null,n.id); break;
+
+    // A source is only openable when it has somewhere to go.
+    case "open-source": {
+      const url=((n.meta.sources||[])[0]||{}).url;
+      if(url) window.open(url,"_blank","noopener");
+      else toast("No link on this source — add one with Edit");
+      break;
+    }
+    case "export": exportResult(n); break;
     default: toast("Noted");
   }
+}
+
+/* "Link or challenge a claim" means: connect this to something, and say how.
+   The graph already supports exactly that, so offer it directly. */
+function linkFromNode(n){
+  const others=curProj().nodes.filter(x=>x.id!==n.id&&!wouldCycle(n.id,x.id)
+    && !curProj().edges.some(e=>e.from===n.id&&e.to===x.id));
+  if(!others.length){ toast("Nothing left to connect this to"); return; }
+  openMenu(nodeEls[n.id]||el.canvas,`
+    <div class="m-head">Connect to…</div>
+    ${others.slice(0,12).map(x=>`<button class="mi" data-link="${x.id}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(x.type)}"></span><span>${esc(nodeHeading(x).title)}</span></button>`).join("")}
+  `,m=>{
+    $$("[data-link]",m).forEach(b=>b.addEventListener("click",()=>{
+      const to=nodeById(b.dataset.link); closeMenus();
+      curProj().edges.push({from:n.id,to:to.id,rel:inferRel(n,to)});
+      relayout(); savePersist(); toast(`Connected to ${nodeHeading(to).title}`);
+    }));
+  });
+}
+
+/* Download what the result actually holds, rather than claiming to export. */
+function exportResult(n){
+  const d=curData();
+  const rows=[["rank","candidate","score","uncertainty","family"]];
+  ((d.candidates&&d.candidates.rows)||[]).forEach((r,i)=>rows.push([i+1,r.id,r.score,r.err==null?"":r.err,r.family||""]));
+  rows.push([]); rows.push(["top fraction screened (%)","enrichment (x)","baseline (x)"]);
+  const e=d.enrichment||{};
+  (e.x||[]).forEach((x,i)=>rows.push([x,(e.proposed||[])[i],(e.baseline||[])[i]]));
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
+  a.download=`${curProj().id}-results.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Downloaded CSV");
 }
 
 /* =========================== inline previews ========================== */
@@ -2041,8 +2262,10 @@ function buildPreview(n,ps){
   wrap.style.left=ps.x+"px"; wrap.style.top=ps.y+"px"; wrap.style.width=ps.w+"px";
   if(!ps.collapsed) wrap.style.height=ps.h+"px";
   const tab=ps.tab||"plot";
-  const body = tab==="plot"
-    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">${(state.dataMode==="live"&&CHART_DATA.live)?"Measured · this run":d.measured?"Sample · verified":"Illustrative"}</span></div>${chartBlock("enrichment",d,false)}`
+  const body = !d
+    ? `<div class="preview-empty">No results yet — press Run</div>`
+    : tab==="plot"
+    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><span class="illus-pill">Measured · this run</span></div>${chartBlock("enrichment",d,false)}`
     : candidateTable(d);
   wrap.innerHTML=`
     <div class="preview-head">
@@ -2089,59 +2312,453 @@ function renderCmdCtx(){
     el.cmdCtx.appendChild(c);
   }
 }
+/* The bar asks the lab a question. It used to guess from the wording whether
+   you meant a note, some evidence or a question, which made it a worse way of
+   adding a node than the add menu beside it. Adding now lives on the plus. */
+/* The bar is where a project's question lives. It used to hold a second copy
+   of the question that nothing else read, which is why it felt pointless once
+   a project existed. Typing here now edits the project's question node — the
+   same text the graph shows and a run is approved against. */
+function questionNode(){
+  return curProj().nodes.find(n=>n.type==="question") || null;
+}
+function syncQuestionBar(){
+  const inp=$("#cmdInput"); if(!inp) return;
+  if(document.activeElement===inp) return;        // don't fight the typist
+  const q=questionNode();
+  inp.value = q ? (q.meta.objective||q.summary||q.title||"") : (state.question||"");
+}
 function sendCmd(){
-  const inp=$("#cmdInput"); const t=inp.value.trim(); if(!t)return;
-  // A question is the thing the lab actually answers, so it becomes the run's
-  // question rather than another sticky note on the canvas.
-  const isQuestion=/\?\s*$/.test(t)||/^(which|what|how|why|does|do|is|are|can|should)\b/i.test(t);
-  if(isQuestion){
-    state.question=t; inp.value="";
-    updateProvenance&&updateProvenance();
-    if(state.run.active){ toast("Question set — applies to the next run"); return; }
-    // Still goes through the approval gate; a typed question does not skip it.
-    openRunModal(curProj().primaryExp);
-    return;
+  const inp=$("#cmdInput"); const t=inp.value.trim();
+  if(!t){ toast("Type the question this project is asking"); return; }
+  state.question=t;
+  let q=questionNode();
+  if(q){
+    q.meta=Object.assign({},q.meta,{objective:t});
+    q.summary=t; q.title="Research question";
+    toast("Question updated");
+  }else{
+    q=P("q-"+Math.random().toString(36).slice(2,6),"question","Research question",t,"done",0,0,{objective:t});
+    q.origin="user"; curProj().nodes.push(q);
+    toast("Question added to the graph");
   }
-  const isEvidence=/source|evidence|paper|cite|doi|dataset/i.test(t);
-  const type=isEvidence?"source":"note";
-  const linkTo=state.selection?nodeById(state.selection):null;
-  addNode(type,t);
-  inp.value="";
-  toast((isEvidence?"Added evidence node":"Added note")+(linkTo?" linked to "+linkTo.title:""));
+  renderGraph();
+  if(state.selection===q.id){ renderPaneHeader(q); renderPaneBody(q); }
+  renderCmdCtx(); savePersist();
 }
 $("#cmdSend").addEventListener("click",sendCmd);
+$("#cmdPlus").addEventListener("click",e=>{ e.stopPropagation(); openAddNodeMenu($("#cmdPlus")); });
 $("#cmdInput").addEventListener("keydown",e=>{ if(e.key==="Enter")sendCmd(); });
 
 /* ============================== add node ============================== */
-function addNode(type,text){
+/* ============================ graph layout ============================
+   A research graph is a DAG that reads left to right: question → evidence →
+   hypotheses → experiment → result → next question. Laying it out in layers
+   by depth matches how people read it, and ordering each layer by the average
+   position of its neighbours removes most edge crossings without needing a
+   full crossing-minimisation pass. Hand-placed positions do not survive a run
+   that adds dozens of claim nodes, so this has to be one click away. */
+const LAYER_GAP=96, ROW_GAP=28;
+
+function layoutGraph(p){
+  const nodes=p.nodes, edges=p.edges||[];
+  if(!nodes.length) return;
+  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const out={}, indeg={};
+  for(const n of nodes){ out[n.id]=[]; indeg[n.id]=0; }
+  for(const e of edges){ if(byId[e.from]&&byId[e.to]&&e.from!==e.to){ out[e.from].push(e.to); indeg[e.to]++; } }
+
+  // Longest-path layering over a topological order, so every edge points
+  // forward. Any cycle leaves nodes unvisited; those get appended at the end
+  // rather than silently dropped.
+  const depth={}; const queue=nodes.filter(n=>!indeg[n.id]).map(n=>n.id);
+  for(const id of queue) depth[id]=0;
+  const pending={...indeg};
+  for(let i=0;i<queue.length;i++){
+    const id=queue[i];
+    for(const next of out[id]){
+      depth[next]=Math.max(depth[next]??0, depth[id]+1);
+      if(--pending[next]===0) queue.push(next);
+    }
+  }
+  let maxDepth=0;
+  for(const n of nodes){ if(depth[n.id]==null) depth[n.id]=null; else maxDepth=Math.max(maxDepth,depth[n.id]); }
+  for(const n of nodes) if(depth[n.id]==null) depth[n.id]=maxDepth+1;   // cycle remnants
+
+  const layers=[];
+  for(const n of nodes){ (layers[depth[n.id]] ||= []).push(n); }
+
+  // Order each layer by the mean row of its already-placed predecessors.
+  const row={};
+  layers.forEach((layer,li)=>{
+    if(!layer) return;
+    if(li>0) layer.sort((a,b)=>bary(a)-bary(b));
+    layer.forEach((n,i)=>{ row[n.id]=i; });
+    function bary(n){
+      const ins=edges.filter(e=>e.to===n.id&&row[e.from]!=null).map(e=>row[e.from]);
+      return ins.length ? ins.reduce((s,v)=>s+v,0)/ins.length : row[n.id] ?? 0;
+    }
+  });
+
+  const h=n=>{ const el=nodeEls[n.id]; return (el?el.offsetHeight:92); };
+
+  // A run can put thirty-odd claims at the same depth. Stacked in one column
+  // that is a four-thousand-pixel ribbon, so a wide layer wraps into several
+  // sub-columns. Depth order still reads left to right; only the within-layer
+  // packing changes.
+  const MAX_ROWS=6;
+  const groups=[];                                    // one entry per rendered column
+  for(const layer of layers){
+    if(!layer||!layer.length) continue;
+    const subs=Math.ceil(layer.length/MAX_ROWS), per=Math.ceil(layer.length/subs);
+    for(let s=0;s<subs;s++) groups.push(layer.slice(s*per,(s+1)*per));
+  }
+  const colH=groups.map(g=>g.reduce((s,n)=>s+h(n)+ROW_GAP,-ROW_GAP));
+  const tallest=Math.max(...colH,0);
+  groups.forEach((g,i)=>{
+    const x=i*(NODE_W+LAYER_GAP);
+    let y=(tallest-colH[i])/2;                        // centre each column
+    for(const n of g){ n.x=Math.round(x); n.y=Math.round(y); y+=h(n)+ROW_GAP; }
+  });
+}
+
+function tidy(){
+  layoutGraph(curProj());
+  renderGraph(); savePersist(); fit(true);
+  toast("Graph arranged");
+}
+
+/* ========================= adding & removing nodes =====================
+   A node is only worth having on the canvas if it says something, so adding
+   one asks for the fields that node type is actually rendered from. The
+   required ones are the minimum the detail pane needs to not look empty. */
+const NODE_FORM={
+  question:{label:"Question", rel:"uses", fields:[
+    {k:"title",     l:"Title",                   req:true,  ph:"Which compounds should we assay first?"},
+    {k:"objective", l:"What are you trying to find out?", req:true, area:true, ph:"Rank untested compounds so the lab assays the most promising few first."},
+    {k:"outcome",   l:"Measurable outcome",      ph:"Enrichment at a fixed assay budget"},
+    {k:"data",      l:"Data available",          ph:"PubChem BioAssay records"}]},
+  source:{label:"Evidence", rel:"uses", fields:[
+    {k:"title",     l:"Source",                  req:true,  ph:"Metallo-β-lactamase inhibitor review"},
+    {k:"body",      l:"What does it show?",      req:true,  area:true, ph:"Thiol-carboxylate chemotypes recur as validated binders."},
+    {k:"url",       l:"Link (optional)",         ph:"https://doi.org/..."},
+    {k:"relevance", l:"Why it matters here",     ph:"Grounds the chelation prior"}]},
+  hypothesis:{label:"Hypothesis", rel:"supports", fields:[
+    {k:"title",     l:"Short name",              req:true,  ph:"Chelating warheads inhibit the active site"},
+    {k:"statement", l:"Statement",               req:true,  area:true, ph:"Compounds bearing metal-chelating warheads inhibit NDM-1 by coordinating its zinc ions."},
+    {k:"prediction",l:"A prediction it makes",   req:true,  ph:"Chelating chemotypes score above the library median."},
+    {k:"uncertainty",l:"Uncertainty",            ph:"Moderate — priors strong but unvalidated here"}]},
+  experiment:{label:"Experiment", rel:"tests", fields:[
+    {k:"title",     l:"Name",                    req:true,  ph:"Diversity-aware screen"},
+    {k:"method",    l:"Method",                  req:true,  area:true, ph:"Random forest on fingerprints, scaffold split."},
+    {k:"inputs",    l:"Inputs",                  ph:"Labelled fixture + candidate pool"},
+    {k:"controls",  l:"Controls",                ph:"Random control + y-scramble"}]},
+  result:{label:"Result", rel:"produced", fields:[
+    {k:"title",     l:"Title",                   req:true,  ph:"Results · 04"},
+    {k:"interp",    l:"Interpretation",          req:true,  area:true, ph:"What the numbers mean, and what they do not show."}]},
+  next:{label:"Next experiment", rel:"uses", fields:[
+    {k:"title",     l:"Title",                   req:true,  ph:"Next experiment"},
+    {k:"changed",   l:"What changed",            req:true,  area:true, ph:"The chelation prior held; diversity beat potency-only."},
+    {k:"uncertainty",l:"Remaining uncertainty",  ph:"Does it transfer to real assay data?"}]},
+  note:{label:"Note", rel:"uses", fields:[
+    {k:"title",     l:"Note",                    req:true,  area:true, ph:"Anything worth remembering here."}]}
+};
+
+/* Turn form values into the meta shape each pane renderer reads. */
+function metaFor(type,v){
+  if(type==="question")   return {objective:v.objective,outcome:v.outcome,data:v.data};
+  if(type==="source")     return {sources:[{src:v.title,meta:"added by you",body:v.body,url:v.url||""}],relevance:v.relevance};
+  if(type==="hypothesis") return {statement:v.statement,predictions:v.prediction?[v.prediction]:[],uncertainty:v.uncertainty};
+  if(type==="experiment") return {tests:[{name:v.title,sel:true,why:v.method}],method:v.method,inputs:v.inputs,controls:v.controls,approval:"Required before run."};
+  if(type==="result")     return {interp:v.interp};
+  if(type==="next")       return {changed:v.changed,uncertainty:v.uncertainty,tests:[]};
+  return {text:v.title};
+}
+
+/* Read a node back into the shape the form uses, so editing shows what is
+   already there instead of a blank form. */
+function valuesFor(n){
+  const m=n.meta||{}, t=n.type;
+  if(t==="question")   return {title:n.title,objective:m.objective,outcome:m.outcome,data:m.data};
+  if(t==="source")     {const s0=(m.sources||[])[0]||{}; return {title:s0.src||n.title,body:s0.body,url:s0.url,relevance:m.relevance};}
+  if(t==="hypothesis") return {title:n.title,statement:m.statement,prediction:(m.predictions||[])[0],uncertainty:m.uncertainty};
+  if(t==="experiment") return {title:n.title,method:m.method,inputs:m.inputs,controls:m.controls};
+  if(t==="result")     return {title:n.title,interp:m.interp};
+  if(t==="next")       return {title:n.title,changed:m.changed,uncertainty:m.uncertainty};
+  return {title:m.text||n.title};
+}
+
+function openNodeForm(type,prefill,editingId,parentId){
+  const spec=NODE_FORM[type]; if(!spec) return;
+  const editing=editingId?nodeById(editingId):null;
+  if(editing) prefill=valuesFor(editing);
+  // An explicit parent (from a node's menu) wins over whatever is selected.
+  const parentKey=parentId||state.selection;
+  const parent=parentKey?nodeById(parentKey):null;
+  const rows=spec.fields.map(f=>{
+    const val=esc((prefill&&prefill[f.k])||"");
+    const input=f.opts
+      ? `<select data-f="${f.k}">${f.opts.map(o=>`<option value="${o}"${((prefill&&prefill[f.k])===o)?" selected":""}>${o}</option>`).join("")}</select>`
+      : f.area
+        ? `<textarea data-f="${f.k}" rows="3" placeholder="${esc(f.ph||"")}">${val}</textarea>`
+        : `<input data-f="${f.k}" value="${val}" placeholder="${esc(f.ph||"")}">`;
+    return `<div class="field"><label class="flab">${esc(f.l)}${f.req?' <span class="req">required</span>':""}</label>${input}</div>`;
+  }).join("");
+  modal(`
+    <div class="modal-head"><div><h2>${editing?"Edit":"Add"} ${esc(spec.label.toLowerCase())}</h2>
+      <p>${editing?"Changes replace what is on the card and in the detail pane."
+            :(parent?`Will be linked from <b>${esc(parent.title)}</b> as “${esc(spec.rel)}”.`:"Not linked to anything yet — select a node first to connect it.")}</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body"><div class="node-form">${rows}</div>
+      <div class="form-error" id="formErr" hidden></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="nodeGo">${editing?"Save changes":"Add "+esc(spec.label.toLowerCase())}</button></div>
+  `,root=>{
+    const first=root.querySelector("[data-f]"); if(first) first.focus();
+    const submit=()=>{
+      const v={}; for(const f of spec.fields){ const el=root.querySelector(`[data-f="${f.k}"]`); v[f.k]=(el?el.value:"").trim(); }
+      const missing=spec.fields.filter(f=>f.req&&!v[f.k]).map(f=>f.l);
+      if(missing.length){
+        const e=root.querySelector("#formErr");
+        e.textContent=(missing.length===1?"Still needed: ":"Still needed: ")+missing.join(", ");
+        e.hidden=false; return;
+      }
+      closeModal(); editing ? applyNodeEdit(editing,v) : createNode(type,v,parentKey);
+    };
+    root.querySelector("#nodeGo").addEventListener("click",submit);
+    root.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) submit(); });
+  });
+}
+
+function createNode(type,v,parentId){
   if(!requireAccount("add to a project")) return null;
-  const p=curProj(); const r=canvasRect(); const c=screenToWorld(r.width/2, r.height/2);
+  const p=curProj(); const spec=NODE_FORM[type];
+  const parentKey=parentId||state.selection;
   const id=type[0]+"-"+Math.random().toString(36).slice(2,6);
-  const titleMap={question:"New question",source:"New evidence",hypothesis:"New hypothesis",experiment:"New experiment",result:"New result",note:"Note"};
-  const n=P(id,type,text?(text.length>42?text.slice(0,40)+"…":text):titleMap[type], text?"":"", type==="experiment"?"planned":"done", Math.round(c.x-NODE_W/2), Math.round(c.y-40), type==="note"?{text:text||""}:{});
+  const title=v.title.length>46?v.title.slice(0,44)+"…":v.title;
+  const summary={question:v.objective,source:v.body,hypothesis:v.statement,
+                 experiment:v.method,result:v.interp,next:v.changed,note:""}[type]||"";
+  const n=P(id,type,title,summary.length>90?summary.slice(0,88)+"…":summary,
+            type==="experiment"?"planned":"done",0,0,metaFor(type,v));
+  n.origin="user";                       // distinguishes it from generated nodes
   p.nodes.push(n);
-  if(state.selection){ p.edges.push({from:state.selection,to:id,rel:type==="source"?"uses":(type==="hypothesis"?"supports":"uses")}); }
-  renderGraph(); selectNode(id); savePersist();
+  if(parentKey&&nodeById(parentKey)) p.edges.push({from:parentKey,to:id,rel:spec.rel});
+  relayout();                            // position is derived, never typed in
+  selectNode(id); savePersist();
+  toast(`${spec.label} added`);
   return n;
 }
 
+/* Edits replace only the fields the form owns, so anything else a run
+   attached to the node (provenance, chart payloads) is left alone. */
+function applyNodeEdit(n,v){
+  const summary={question:v.objective,source:v.body,hypothesis:v.statement,
+                 experiment:v.method,result:v.interp,next:v.changed,note:""}[n.type]||"";
+  n.title=v.title.length>46?v.title.slice(0,44)+"…":v.title;
+  n.summary=summary.length>90?summary.slice(0,88)+"…":summary;
+  n.meta=Object.assign({},n.meta,metaFor(n.type,v));
+  n.edited=true;
+  renderGraph();
+  if(state.selection===n.id){ renderPaneHeader(n); renderPaneBody(n); }
+  savePersist();
+  toast("Changes saved");
+}
+
+/* Which relation a new connection gets, inferred from what is being joined so
+   the common case needs no extra click. Change it from the edge's menu. */
+function inferRel(from,to){
+  if(to.type==="hypothesis") return from.type==="source"?"supports":"uses";
+  if(to.type==="experiment") return "tests";
+  if(to.type==="result")     return "produced";
+  return "uses";
+}
+
+/* Drag from a node's port onto another node to connect them. */
+function beginLink(ev,from){
+  ev.preventDefault(); ev.stopPropagation();
+  const ghost=document.createElementNS("http://www.w3.org/2000/svg","path");
+  ghost.setAttribute("class","edge-ghost");
+  el.edges.appendChild(ghost);
+  const vb=el.edges.getBoundingClientRect(), v=view();
+  const toWorld=(cx,cy)=>({x:(cx-vb.left)/v.scale+parseFloat(el.edges.style.left||0),
+                           y:(cy-vb.top)/v.scale+parseFloat(el.edges.style.top||0)});
+  const a=nodeBox(from), x1=a.x+a.w, y1=a.y+a.h/2;
+  let hovered=null;
+  const move=e=>{
+    const p=toWorld(e.clientX,e.clientY);
+    ghost.setAttribute("d",`M${x1},${y1} C${x1+60},${y1} ${p.x-60},${p.y} ${p.x},${p.y}`);
+    const over=document.elementFromPoint(e.clientX,e.clientY)?.closest(".node");
+    const id=over?.dataset.id;
+    if(id!==hovered){
+      if(hovered&&nodeEls[hovered]) nodeEls[hovered].classList.remove("link-target");
+      hovered=(id&&id!==from.id)?id:null;
+      if(hovered) nodeEls[hovered].classList.add("link-target");
+    }
+  };
+  const up=()=>{
+    removeEventListener("pointermove",move); removeEventListener("pointerup",up);
+    ghost.remove();
+    if(hovered&&nodeEls[hovered]) nodeEls[hovered].classList.remove("link-target");
+    if(!hovered) return;
+    const to=nodeById(hovered); const p=curProj();
+    if(p.edges.some(e=>e.from===from.id&&e.to===hovered)){ toast("Already connected"); return; }
+    if(wouldCycle(from.id,hovered)){ toast("That would make a loop"); return; }
+    p.edges.push({from:from.id,to:hovered,rel:inferRel(from,to)});
+    renderGraph(); savePersist();
+    toast(`${from.title} → ${to.title}`);
+  };
+  addEventListener("pointermove",move); addEventListener("pointerup",up);
+}
+
+/* The layout reads left to right, so a connection that closes a loop has no
+   sensible place to sit. Refuse it rather than draw something misleading. */
+function wouldCycle(fromId,toId){
+  const p=curProj(); const seen=new Set(); const stack=[toId];
+  while(stack.length){
+    const cur=stack.pop();
+    if(cur===fromId) return true;
+    if(seen.has(cur)) continue; seen.add(cur);
+    for(const e of p.edges) if(e.from===cur) stack.push(e.to);
+  }
+  return false;
+}
+
+/* Right-click an edge: change what it means, or detach it. */
+function edgeContextMenu(ev,edge){
+  ev.preventDefault(); ev.stopPropagation();
+  const a=nodeById(edge.from), b=nodeById(edge.to);
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(a?a.title:"?")} → ${esc(b?b.title:"?")}</div>
+    ${Object.keys(REL_LABEL).map(r=>`<button class="mi" data-rel="${r}"${r===edge.rel?' aria-current="true"':""}><span>${esc(REL_LABEL[r])}</span></button>`).join("")}
+    <div class="m-sep"></div>
+    <button class="mi danger" data-edge="del"><span>Remove connection</span></button>
+  `,m=>{
+    $$("[data-rel]",m).forEach(btn=>btn.addEventListener("click",()=>{
+      edge.rel=btn.dataset.rel; closeMenus(); renderEdges(); savePersist(); toast("Relation updated");
+    }));
+    $$("[data-edge]",m).forEach(btn=>btn.addEventListener("click",()=>{
+      const p=curProj(); p.edges=p.edges.filter(e=>e!==edge);
+      closeMenus(); renderGraph(); savePersist(); toast("Connection removed");
+    }));
+  });
+}
+
+/* Right-click on a node. Same actions as the pane, where the hand expects
+   them. The destructive one is last and marked. */
+function nodeContextMenu(ev,n){
+  ev.preventDefault(); ev.stopPropagation();
+  // Deliberately does not select: a right-click asks for actions, not for the
+  // detail pane. Kept to two, since adding lives on the plus in the ask bar.
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(nodeHeading(n).title)}</div>
+    <button class="mi" data-cm="edit"><span>Edit node…</span></button>
+    <button class="mi danger" data-cm="delete"><span>Delete node</span></button>
+  `,m=>{
+    $$("[data-cm]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.cm; closeMenus();
+      if(a==="edit") openNodeForm(n.type,null,n.id); else deleteNode(n.id);
+    }));
+  });
+  if(nodeEls[n.id]) nodeEls[n.id].classList.add("context-target");
+}
+
+/* Right-click on empty canvas: add something, or re-space the graph. */
+function canvasContextMenu(ev){
+  if(ev.target.closest(".node")||ev.target.closest(".preview")||ev.target.closest(".overlay")) return;
+  ev.preventDefault();
+  const kids=Object.entries(NODE_FORM).map(([t,s])=>
+    `<button class="mi" data-add2="${t}"><span>${esc(s.label)}</span></button>`).join("");
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">Add node</div>${kids}
+    <div class="m-sep"></div>
+    <button class="mi" data-cv="tidy"><span>Tidy layout</span></button>
+    <button class="mi" data-cv="fit"><span>Fit to screen</span></button>
+  `,m=>{
+    $$("[data-add2]",m).forEach(b=>b.addEventListener("click",()=>{ closeMenus(); openNodeForm(b.dataset.add2); }));
+    $$("[data-cv]",m).forEach(b=>b.addEventListener("click",()=>{ const a=b.dataset.cv; closeMenus(); a==="tidy"?tidy():fit(true); }));
+  });
+}
+
+function deleteNode(id){
+  const p=curProj(); const n=nodeById(id); if(!n) return;
+  const generated=n.origin!=="user";
+  const go=()=>{
+    p.nodes=p.nodes.filter(x=>x.id!==id);
+    p.edges=p.edges.filter(e=>e.from!==id&&e.to!==id);
+    const pv=state.previews[p.id]; if(pv) delete pv[id];
+    if(p.primaryExp===id) p.primaryExp=null;
+    if(p.resultNode===id) p.resultNode=null;
+    if(state.selection===id) clearSelection();
+    relayout(); savePersist();
+    toast(`Deleted “${n.title}”`);
+  };
+  // Removing something a run produced loses part of the record, so confirm it.
+  if(!generated) return go();
+  modal(`
+    <div class="modal-head"><div><h2>Delete this node?</h2>
+      <p>“${esc(n.title)}” came from the run, not from you. Deleting it removes it from the record along with its connections.</p></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Keep it</button>
+      <button class="btn danger" id="delGo">Delete</button></div>
+  `,root=>{ root.querySelector("#delGo").addEventListener("click",()=>{ closeModal(); go(); }); });
+}
+
+/* Re-space the graph after anything structural changes. */
+function relayout(){ layoutGraph(curProj()); renderGraph(); requestAnimationFrame(()=>fit(true)); }
+
 /* =============================== menus =============================== */
-function closeMenus(){ $$(".menu").forEach(m=>m.remove()); document.removeEventListener("pointerdown",menuOutside,true); }
+function closeMenus(){
+  $$(".menu").forEach(m=>m.remove());
+  $$(".node.context-target").forEach(d=>d.classList.remove("context-target"));
+  document.removeEventListener("pointerdown",menuOutside,true);
+}
 function menuOutside(e){ if(!e.target.closest(".menu")&&!e.target.closest("[aria-haspopup]")) closeMenus(); }
-function openMenu(anchor,html,onwire){
-  closeMenus();
-  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html;
+/* Same menu, placed at a point instead of under an element — for right-click. */
+/* Place a menu without letting it paint in the wrong spot first.
+   Appending an absolutely-positioned element with no coordinates renders it
+   at its static position — near the top of the page — and only the following
+   style writes move it to the pointer. That is the jump: it appears high and
+   snaps down. Measuring while hidden, then revealing, means it only ever
+   paints where it belongs. */
+function placeMenu(m,x,y,flipFrom){
+  m.style.visibility="hidden";
+  m.style.left="0px"; m.style.top="0px";
   document.body.appendChild(m);
-  const r=anchor.getBoundingClientRect();
-  let top=r.bottom+6, left=r.left;
-  if(left+m.offsetWidth>innerWidth-10) left=innerWidth-m.offsetWidth-10;
-  if(top+m.offsetHeight>innerHeight-10) top=r.top-m.offsetHeight-6;
-  m.style.top=Math.max(10,top)+"px"; m.style.left=Math.max(10,left)+"px";
-  if(onwire)onwire(m);
+  const w=m.offsetWidth, h=m.offsetHeight;
+  let left=x, top=y;
+  if(left+w>innerWidth-10)  left=(flipFrom!=null?innerWidth-w-10:x-w);
+  if(top+h>innerHeight-10)  top=(flipFrom!=null?flipFrom-h-6:y-h);
+  m.style.left=Math.max(10,left)+"px";
+  m.style.top=Math.max(10,Math.min(top,innerHeight-h-10))+"px";
+  m.style.visibility="";
+  return m;
+}
+function buildMenu(html){
+  const m=document.createElement("div"); m.className="menu"; m.innerHTML=html; return m;
+}
+function armMenuDismiss(){
   setTimeout(()=>document.addEventListener("pointerdown",menuOutside,true),0);
 }
+
+/* Menu at a point — for right-click. */
+function openMenuAt(x,y,html,onwire){
+  closeMenus();
+  const m=placeMenu(buildMenu(html),x,y);
+  if(onwire)onwire(m);
+  armMenuDismiss();
+  return m;
+}
+
+/* Menu under an element — for toolbar buttons. */
+function openMenu(anchor,html,onwire){
+  closeMenus();
+  const r=anchor.getBoundingClientRect();
+  const m=placeMenu(buildMenu(html),r.left,r.bottom+6,r.top);
+  if(onwire)onwire(m);
+  armMenuDismiss();
+  return m;
+}
 $("#crumb").addEventListener("click",()=>{
-  const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]}</svg><span>${esc(p.name)}</span><span class="mi-sub" style="margin-left:auto">${esc(p.run)}</span></button>`;}).join("");
+  const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi mi-project" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]||PROJECT_ICON.flask}</svg><span class="mi-name">${esc(p.name)}</span><span class="mi-run">${esc(p.run||"")}</span></button>`;}).join("");
   // Anonymous visitors see the demo and an invitation to sign in; there is no
   // New or Delete to offer them, so the menu does not pretend otherwise.
   const canEdit=ACCOUNT.mode==="user"&&!isReadOnly();
@@ -2241,59 +2858,418 @@ async function deleteCurrentProject(){
   }
 }
 $("#provenance").addEventListener("click",()=>{
-  openMenu($("#provenance"),`
-    <div class="m-head">Data source${CHART_DATA.live?"":" (sample)"}</div>
-    ${CHART_DATA.live?`<button class="mi" data-mode="live" aria-current="${state.dataMode==='live'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/></svg><span>This run (measured)<div class="mi-sub">${esc(CHART_DATA.live.tag||"live run")}</div></span></button>`:""}
-    <button class="mi" data-mode="verified" aria-current="${state.dataMode==='verified'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg><span>NDM-1 verified<div class="mi-sub">ROC-AUC 0.75 · 11.3× @1% · clean controls</div></span></button>
-    <button class="mi" data-mode="illustrative" aria-current="${state.dataMode==='illustrative'}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg><span>Illustrative placeholders<div class="mi-sub">Generic shapes from the mockups</div></span></button>
-    <div class="m-sep"></div>
-    <div class="m-head">Run provenance</div>
-    <div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Values are labelled <b>sample</b>, never measured findings. A live run (served from your Mac) is tagged <b>Live Omnigent run</b>; a shared demo replays a labelled trace.</div>
-  `,m=>{ $$("[data-mode]",m).forEach(b=>b.addEventListener("click",()=>{ setDataMode(b.dataset.mode); closeMenus(); })); });
+  toast(hasResults()
+    ? "Showing the measured output of the last run"
+    : "No results yet — press Run to produce some");
 });
-function setDataMode(mode){
-  if(mode==="live"&&!CHART_DATA.live) return;   // nothing measured yet
-  state.dataMode=mode; updateProvenance(); savePersist();
-  // refresh any open result pane + previews
-  if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
-  renderPreviews();
-  toast(mode==="live"?"Showing this run's measured results"
-      :mode==="verified"?"Showing NDM-1 verified sample":"Showing illustrative placeholders");
-}
+
 /* Take the charts, shortlist and headline stats from a finished run. The
    bundled sample stays selectable, so a viewer can always see which is which. */
+/* Replace the project's graph with what the run produced. The previous graph
+   was this project's previous answer, so keeping both would leave two
+   unrelated investigations on one canvas. Anything the user added by hand is
+   carried over, because they did not ask for it to be thrown away. */
+function adoptRunGraph(g){
+  if(!g||!g.nodes||!g.nodes.length) return;
+  const p=curProj();
+  const mine=p.nodes.filter(n=>n.origin==="user");
+  const mineIds=new Set(mine.map(n=>n.id));
+  const keptEdges=p.edges.filter(e=>mineIds.has(e.from)&&mineIds.has(e.to));
+  p.nodes=g.nodes.map(n=>Object.assign(
+    P(n.id,n.type,n.title,n.summary||"",n.status||"done",0,0,n.meta||{}),{origin:"run"}));
+  p.edges=g.edges.slice();
+  p.nodes.push(...mine); p.edges.push(...keptEdges);
+  p.primaryExp=null;
+  p.resultNode=null;
+  relayout(); savePersist();
+  toast(`Graph rebuilt from the run — ${g.nodes.length} nodes`);
+}
+
 function adoptRunData(data){
   if(!data||!data.charts) return;
   CHART_DATA.live=data.charts;
-  state.dataMode="live"; updateProvenance();
+  // Write the interpretation from what the run measured, replacing whatever
+  // text the node was carrying. No prose about results that did not happen.
+  const res=nodeById(curProj().resultNode);
+  if(res){
+    const f=v=>v==null?"n/a":(Math.round(v*100)/100);
+    res.meta=Object.assign({},res.meta,{
+      interp:`Ranked ${data.n_compounds??"?"} compounds. ROC-AUC ${f(data.roc_auc)} on a held-out scaffold split; `
+            +`enrichment ${f(data.ef_top1pct)}x at the top 1% and ${f(data.ef_top5pct)}x at 5%. `
+            +`The critic ${data.passed?"accepted":"did not accept"} this result.`
+            +(data.next?` Suggested next: ${data.next}`:""),
+      provenance:{run:"this session",data:data.source||"unknown",
+                  params:`${data.n_test??"?"} held-out compounds`,approvals:"approved in this session"}
+    });
+  }
+  updateProvenance();
   if(state.selection){ const n=nodeById(state.selection); if(n&&n.type==="result") renderPaneBody(n); }
   renderPreviews(); savePersist();
 }
+function projectHasData(){ return hasResults(); }
 function updateProvenance(){
   const d=curData();
+  // The sample charts belong to NDM-1. Other projects have no measured
+  // data, so the badge says that instead of borrowing the wrong label.
+  if(!projectHasData()){
+    el.provenance.dataset.kind="none";
+    el.provText.textContent="No results yet";
+    el.provTextLong.textContent="· run an experiment to produce some";
+    return;
+  }
   // Once a run has happened the displayed data is measured, so the badge must
   // stop calling it sample data.
-  const showingMeasured = state.dataMode==="live" && !!CHART_DATA.live;
+  const showingMeasured = hasResults();
   el.provenance.dataset.kind = state.run.active
     ? (state.run.mode==="live"?"live":"replay")
     : (showingMeasured?"live":"sample");
   if(state.run.active){ el.provText.textContent = state.run.mode==="live"?"Live Omnigent run":"Replaying trace"; el.provTextLong.textContent=""; }
-  else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent="· "+d.tag; }
+  else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent=d?("· "+d.tag):""; }
 }
-$("#addNode").addEventListener("click",()=>{
-  const types=[["question","Question"],["source","Source / evidence"],["hypothesis","Hypothesis"],["experiment","Experiment"],["result","Result"],["note","Note"]];
-  openMenu($("#addNode"),`<div class="m-head">Add node</div>${types.map(([t,l])=>`<button class="mi" data-add="${t}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(t)}"></span><span>${esc(l)}</span></button>`).join("")}`,
-    m=>{ $$("[data-add]",m).forEach(b=>b.addEventListener("click",()=>{ addNode(b.dataset.add); closeMenus(); })); });
+/* One add-node menu, opened from the toolbar or the plus in the ask bar. */
+function openAddNodeMenu(anchor){
+  const types=[["question","Question"],["source","Source / evidence"],["hypothesis","Hypothesis"],
+               ["experiment","Experiment"],["result","Result"],["note","Note"]];
+  openMenu(anchor,`<div class="m-head">Add node</div>${types.map(([t,l])=>
+    `<button class="mi" data-add="${t}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(t)}"></span><span>${esc(l)}</span></button>`).join("")}`,
+    m=>{ $$("[data-add]",m).forEach(b=>b.addEventListener("click",()=>{ closeMenus(); openNodeForm(b.dataset.add); })); });
+}
+
+
+/* ============================== projects =============================== */
+function createProject(name,question){
+  const id="p-"+Math.random().toString(36).slice(2,7);
+  const q=P("q-"+id,"question","Research question",question,"done",0,0,{objective:question});
+  q.origin="user";
+  const proj={id,name,icon:"flask",run:"No runs yet",primaryExp:null,resultNode:null,nodes:[q],edges:[]};
+  state.projects[id]=proj; PROJECT_ORDER.push(id);
+  state.deletedProjects=(state.deletedProjects||[]).filter(x=>x!==id);
+  renderProjects(); switchProject(id); savePersist();
+  toast(`Created “${name}”`);
+}
+
+function openProjectForm(){
+  modal(`
+    <div class="modal-head"><div><h2>New project</h2>
+      </div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body"><div class="node-form">
+      <div class="field"><label class="flab">Project name <span class="req">required</span></label>
+        <input data-f="name" placeholder="NDM-1 triage"></div>
+      <div class="field">
+        <label class="flab">Research question <span class="req">required</span>
+          <button type="button" class="flab-action" id="sharpenBtn">Sharpen with AI</button></label>
+        <textarea data-f="question" rows="3" placeholder="Which untested compounds are most likely to inhibit NDM-1?"></textarea></div>
+      <div id="sharpenOut" hidden></div>
+      <div class="form-error" id="formErr" hidden></div>
+    </div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="projGo">Create project</button></div>
+  `,root=>{
+    root.querySelector("[data-f]").focus();
+    wireSharpen(root,root.querySelector('[data-f="question"]'));
+    root.querySelector("#projGo").addEventListener("click",()=>{
+      const name=root.querySelector('[data-f="name"]').value.trim();
+      const question=root.querySelector('[data-f="question"]').value.trim();
+      const miss=[!name&&"Project name",!question&&"Research question"].filter(Boolean);
+      if(miss.length){ const e=root.querySelector("#formErr"); e.textContent="Still needed: "+miss.join(", "); e.hidden=false; return; }
+      closeModal(); createProject(name,question);
+    });
+  });
+}
+
+/* One cheap model call turns a vague question into one the lab can work on.
+   The rewrite is offered, never applied silently: the author decides. */
+function wireSharpen(root,field){
+  const btn=root.querySelector("#sharpenBtn"), out=root.querySelector("#sharpenOut");
+  if(!btn||!out) return;
+  btn.addEventListener("click",async()=>{
+    const q=field.value.trim();
+    if(!q){ field.focus(); return; }
+    btn.disabled=true; btn.textContent="Sharpening…";
+    out.hidden=false;
+    out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Asking the model…</div></div>`;
+    try{
+      const r=await api("/api/refine-question",{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})});
+      const j=await r.json();
+      if(!r.ok){ out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(j.error||"Could not sharpen this")}</div></div>`; return; }
+      out.innerHTML=`
+        <div class="sharpen">
+          ${j.tooBroad?`<div class="sharpen-flag">This is broad enough that no single run could answer it.</div>`:""}
+          <div class="sharpen-q">${esc(j.refined)}</div>
+          ${j.changes&&j.changes.length?`<ul class="sharpen-list">${j.changes.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>`:""}
+          ${j.missing&&j.missing.length?`<div class="sharpen-sub">Still yours to decide: ${j.missing.map(esc).join("; ")}</div>`:""}
+          <div class="sharpen-actions">
+            <button type="button" class="btn primary" id="useRefined">Use this</button>
+            <button type="button" class="btn" id="keepMine">Keep mine</button>
+          </div>
+        </div>`;
+      out.querySelector("#useRefined").addEventListener("click",()=>{
+        field.value=j.refined; out.hidden=true; out.innerHTML=""; field.focus();
+      });
+      out.querySelector("#keepMine").addEventListener("click",()=>{ out.hidden=true; out.innerHTML=""; });
+    }catch(e){
+      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Could not reach the model.</div></div>`;
+    }finally{ btn.disabled=false; btn.textContent="Sharpen with AI"; }
+  });
+}
+
+function deleteProject(id){
+  const proj=state.projects[id]; if(!proj) return;
+  if(PROJECT_ORDER.length<=1){ toast("This is the only project"); return; }
+  modal(`
+    <div class="modal-head"><div><h2>Delete “${esc(proj.name)}”?</h2>
+      <p>Its graph and any runs recorded against it are removed from this browser. This cannot be undone.</p></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Keep it</button>
+      <button class="btn danger" id="projDel">Delete project</button></div>
+  `,root=>{
+    root.querySelector("#projDel").addEventListener("click",()=>{
+      closeModal();
+      delete state.projects[id];
+      PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==id);
+      // Remembered so a built-in does not reappear from BASE on reload.
+      state.deletedProjects=[...new Set([...(state.deletedProjects||[]),id])];
+      delete state.view[id]; delete state.previews[id];
+      if(state.project===id) switchProject(PROJECT_ORDER[0]);
+      renderProjects(); savePersist();
+      toast(`Deleted “${proj.name}”`);
+    });
+  });
+}
+
+function projectContextMenu(ev,id){
+  ev.preventDefault();
+  const proj=state.projects[id];
+  openMenuAt(ev.clientX,ev.clientY,`
+    <div class="m-head">${esc(proj.name)}</div>
+    <button class="mi" data-pm="open"><span>Open</span></button>
+    <button class="mi" data-pm="rename"><span>Rename…</span></button>
+    <div class="m-sep"></div>
+    <button class="mi danger" data-pm="delete"><span>Delete project</span></button>
+  `,m=>{
+    $$("[data-pm]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.pm; closeMenus();
+      if(a==="open") switchProject(id);
+      else if(a==="delete") deleteProject(id);
+      else if(a==="rename") renameProject(id);
+    }));
+  });
+}
+
+function renameProject(id){
+  const proj=state.projects[id];
+  modal(`
+    <div class="modal-head"><div><h2>Rename project</h2></div></div>
+    <div class="modal-body"><div class="node-form"><div class="field">
+      <label class="flab">Name</label><input data-f="name" value="${esc(proj.name)}"></div></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="renGo">Save</button></div>
+  `,root=>{
+    const inp=root.querySelector("[data-f]"); inp.focus(); inp.select();
+    root.querySelector("#renGo").addEventListener("click",()=>{
+      const v=inp.value.trim(); if(!v) return;
+      proj.name=v; closeModal(); renderProjects(); renderCrumb(); savePersist(); toast("Renamed");
+    });
+  });
+}
+
+$("#addProject").addEventListener("click",openProjectForm);
+
+/* Export the project itself — the graph, its question and its connections —
+   rather than a link that means nothing on anyone else's machine. */
+$("#shareBtn").addEventListener("click",()=>{
+  const p=curProj();
+  const payload={exported:new Date().toISOString(),project:{id:p.id,name:p.name,
+    question:(questionNode()||{}).meta?.objective||state.question||"",
+    nodes:p.nodes.map(n=>({id:n.id,type:n.type,title:n.title,summary:n.summary,
+      status:n.status,origin:n.origin||"generated",meta:n.meta})),
+    edges:p.edges}};
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));
+  a.download=`${p.id}-project.json`; a.click(); URL.revokeObjectURL(a.href);
+  toast("Exported project JSON");
 });
-$("#addProject").addEventListener("click",()=>toast("New project — scaffolds a fresh research graph (demo)"));
-$("#shareBtn").addEventListener("click",()=>toast("Share link copied (demo)"));
+
+/* The wordmark opens the source. */
+$("#brand").addEventListener("click",()=>{
+  window.open("https://github.com/exalteddd/relay","_blank","noopener");
+});
+
+/* ============================== settings =============================== */
+function openSettings(){
+  const sysTheme=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
+  const o=state.opts||(state.opts={});
+  modal(`
+    <div class="modal-head"><div><h2>Settings</h2><p>${AUTH.user?`Saved to your account.`:`Saved in this browser.`}</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+
+      <div class="section"><h3>Research runs</h3>
+        <div class="field"><label class="flab">Default question</label>
+          <textarea data-s="question" rows="2" placeholder="Which untested compounds are most likely to inhibit NDM-1?">${esc(state.question||"")}</textarea></div>
+        <div class="field"><label class="flab">Compound data</label>
+          <select data-s="aid">
+            <option value=""${!o.aid?" selected":""}>Bundled fixture — offline, reproducible</option>
+            <option value="live"${o.aid?" selected":""}>Live PubChem assay — needs an assay id</option>
+          </select></div>
+        <div class="field" data-when="aid"${o.aid?"":' hidden'}><label class="flab">PubChem BioAssay ID</label>
+          <input data-s="aidNum" inputmode="numeric" value="${esc(o.aid||"")}" placeholder="1259411"></div>
+        <div class="field"><label class="flab">After a run finishes</label>
+          <select data-s="autoTidy">
+            <option value="no"${o.autoTidy?"":" selected"}>Leave the layout alone</option>
+            <option value="yes"${o.autoTidy?" selected":""}>Re-space the graph automatically</option>
+          </select></div>
+      </div>
+
+      <div class="section"><h3>Diagram</h3>
+        <div class="field"><label class="flab">Mode</label>
+          <select data-s="editing">
+            <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
+            <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
+          </select></div>
+
+      </div>
+
+      <div class="section"><h3>Appearance</h3>
+        <div class="field"><label class="flab">Theme</label>
+          <select data-s="theme">
+            <option value="">Match system (${sysTheme})</option>
+            <option value="light"${state.theme==="light"?" selected":""}>Light</option>
+            <option value="dark"${state.theme==="dark"?" selected":""}>Dark</option>
+          </select></div>
+      </div>
+
+      <div class="section"><h3>Account</h3><dl class="kv">
+        <dt>Signed in as</dt><dd>${esc(AUTH.user||(AUTH.devOpen?"local development":"not signed in"))}</dd>
+        <dt>Can start runs</dt><dd>${AUTH.mayRun?"yes":"no"}</dd>
+        <dt>Engine</dt><dd>${AUTH.reachable?(AUTH.engine?"available on this server":"not installed on this server"):"no server — runs replay a trace"}</dd>
+        <dt>Graphs saved</dt><dd>${AUTH.user?"to your account — they follow you to another browser":"in this browser only"}</dd>
+      </dl>
+      ${actionRow(AUTH.user?[{id:"switch",label:"Switch account"}]:[{id:"switch",label:"Sign in"}])}</div>
+
+      <div class="section"><h3>Keyboard</h3><dl class="kv">
+        <dt>F</dt><dd>Fit the graph to the screen</dd>
+        <dt>T</dt><dd>Tidy the layout</dd>
+        <dt>E</dt><dd>Toggle editing</dd>
+        <dt>Del</dt><dd>Delete the selected node</dd>
+        <dt>Esc</dt><dd>Close the pane or menu</dd>
+      </dl></div>
+
+      <div class="section"><h3>Local data</h3>
+        <div class="prose"><p>${AUTH.user
+            ? "Signed in, so your graphs are saved to your account and load on any browser you sign in from. They are visible only to you."
+            : "Not signed in, so your graphs live in this browser only. Sign in and they move to your account."}</p></div>
+        ${actionRow([{id:"wipe",label:"Reset this browser's data"}])}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn primary" data-close>Done</button></div>
+  `,root=>{
+    const sel=k=>root.querySelector(`[data-s="${k}"]`);
+    const save=()=>savePersist();
+    sel("theme").addEventListener("change",e=>{
+      state.theme=e.target.value||null; applyTheme(); renderEdges(); renderMinimap(); save();
+    });
+    sel("editing").addEventListener("change",e=>setEditing(e.target.value==="editing"));
+    sel("question").addEventListener("input",e=>{ state.question=e.target.value.trim(); renderCmdCtx(); save(); });
+    sel("autoTidy").addEventListener("change",e=>{ state.opts.autoTidy=e.target.value==="yes"; save(); });
+    sel("aid").addEventListener("change",e=>{
+      const live=e.target.value==="live";
+      root.querySelector('[data-when="aid"]').hidden=!live;
+      if(!live){ state.opts.aid=null; sel("aidNum").value=""; }
+      save();
+    });
+    sel("aidNum").addEventListener("input",e=>{
+      const v=e.target.value.replace(/[^0-9]/g,""); e.target.value=v;
+      state.opts.aid=v||null; save();
+    });
+    root.querySelector('[data-paneact="switch"]')?.addEventListener("click",()=>{
+      closeModal(); openAccountMenu($("#authRow"));
+    });
+    root.querySelector('[data-paneact="wipe"]')?.addEventListener("click",()=>{
+      if(!confirm("Clear every graph, added node and layout stored in this browser?")) return;
+      try{ localStorage.removeItem(LSK); }catch(e){}
+      location.reload();
+    });
+  });
+}
+
+/* ============================ account menu ============================= */
+function openAccountMenu(anchor){
+  const signedIn=!!AUTH.user;
+  openMenu(anchor,`
+    <div class="m-head">${esc(AUTH.user||(AUTH.devOpen?"Local development":"Not signed in"))}</div>
+    ${signedIn
+      ? `<button class="mi" data-am="profile"><span>Open GitHub profile</span></button>
+         <button class="mi" data-am="signout"><span>Sign out</span></button>`
+      : AUTH.devOpen
+        ? `<div style="padding:4px 10px 10px;font-size:12px;color:var(--ink-2);line-height:1.5">No GitHub app is configured on this server, so there is nothing to sign in to and runs are open.<br><br>To try sign-in locally, register an OAuth app with callback <code>${esc(location.origin)}/auth/callback</code> and put its id and secret in <code>.env</code>.</div>`
+        : AUTH.reachable
+          ? `<button class="mi" data-am="signin"><span>Sign in with GitHub</span></button>
+             <button class="mi" data-am="signup"><span>Create a GitHub account</span></button>`
+          : `<div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">No server on this host, so there is nothing to sign in to.</div>`}
+  `,m=>{
+    $$("[data-am]",m).forEach(b=>b.addEventListener("click",()=>{
+      const a=b.dataset.am; closeMenus();
+      if(a==="signin") window.location.href=(CFG.backendUrl||"")+"/auth/login?next="+encodeURIComponent(location.pathname);
+      else if(a==="signup") window.open("https://github.com/signup","_blank","noopener");
+      else if(a==="profile") window.open("https://github.com/"+encodeURIComponent(AUTH.user),"_blank","noopener");
+      else if(a==="signout") api("/auth/logout",{method:"POST"}).then(()=>{AUTH.user=null;AUTH.mayRun=false;renderAuth();toast("Signed out");});
+    }));
+  });
+}
 
 /* =============================== run flow ============================= */
-$("#runBtn").addEventListener("click",()=>{
+$("#runBtn").addEventListener("click",async()=>{
   const sel=state.selection?nodeById(state.selection):null;
-  const expId = (sel&&sel.type==="experiment")?sel.id:curProj().primaryExp;
-  openRunModal(expId);
+  // Selecting an experiment is an explicit ask for that experiment.
+  if(sel&&sel.type==="experiment"){ openRunModal(sel.id); return; }
+  // Otherwise the question decides, not whether an experiment happens to
+  // exist: a project can hold a compound screen and still be asked something
+  // the screen cannot answer.
+  const q=(questionNode()||{}).meta?.objective||state.question||"";
+  let mode="literature", why="";
+  try{
+    const r=await api("/api/resolve?q="+encodeURIComponent(q));
+    if(r.ok){ const j=await r.json(); mode=j.mode; why=j.why||""; }
+  }catch(e){}
+  const expId=curProj().primaryExp;
+  if(mode==="screen"&&expId&&nodeById(expId)) openRunModal(expId);
+  else openResearchModal(why);
 });
+
+/* Approval for a question with no experiment behind it: the run reviews the
+   literature. Says what it will and will not do before spending anything. */
+function openResearchModal(why){
+  const q=(questionNode()||{}).meta?.objective||state.question||"";
+  if(!q){ toast("Set this project's question first"); return; }
+  modal(`
+    <div class="modal-head"><div><h2>Run a literature review</h2>
+      <p>${esc(why||"No registered experiment matches this question")}, so the lab will research it rather than execute anything.</p></div>
+      <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="field"><label class="flab">Question</label><div class="fval">${esc(q)}</div></div>
+      <div class="review-grid">
+        <div><label class="flab">Sources</label><div class="fval">OpenAlex, Semantic Scholar, arXiv, Europe PMC</div></div>
+        <div><label class="flab">Produces</label><div class="fval">Grounded claims, hypotheses, a critique</div></div>
+        <div><label class="flab">Takes</label><div class="fval">A few minutes</div></div>
+        <div><label class="flab">Costs</label><div class="fval">Roughly 4 cents of model usage</div></div>
+      </div>
+      <div class="approve" id="approveBox" role="checkbox" aria-checked="false" tabindex="0">
+        <span class="box">${IC.check}</span>
+        <span class="atext"><b>I approve this run.</b> Every claim is checked against its source abstract and dropped if the quote is not there. Hypotheses are generated and unvalidated.</span>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="runGo" disabled>${IC.play}<span>Approve &amp; run</span></button></div>
+  `,root=>{
+    let ok=false; const box=$("#approveBox",root), go=$("#runGo",root);
+    const tog=()=>{ ok=!ok; box.classList.toggle("checked",ok); box.setAttribute("aria-checked",String(ok)); go.disabled=!ok; };
+    box.addEventListener("click",tog);
+    box.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="Enter"){e.preventDefault();tog();} });
+    go.addEventListener("click",()=>{ closeModal(); startRun(null); });
+  });
+}
 function openRunModal(expId){
   const exp=nodeById(expId)||nodeById(curProj().primaryExp);
   if(!exp){ startRun(expId); return; }
@@ -2330,16 +3306,17 @@ function openRunModal(expId){
 }
 async function startRun(expId){
   if(state.run.active) return;
-  const exp=nodeById(expId); if(!exp) return;
+  const exp=expId?nodeById(expId):null;
+  if(expId&&!exp) return;
   // reset downstream
   state.run.active=true; state.run.log=[]; state.run.id++;
-  const runId=(curProj().id==="ndm1"?"r-":curProj().id==="materials"?"m-":"s-")+String(state.run.id).padStart(2,"0");
+  const runId="r-"+String(state.run.id).padStart(2,"0");
   const live=await hasBackend();
   state.run.mode=live?"live":"replay";
   updateProvenance();
   el.runbar.hidden=false; $("#runTxt").textContent=live?"Live Omnigent run":"Replaying trace";
   $("#runSub").textContent="· "+runId;
-  setStatus(expId,"running");
+  if(expId) setStatus(expId,"running");
   // open the result node's Activity tab so events stream where the user can watch
   const resId=curProj().resultNode;
   if(resId){ selectNode(resId); const rn=nodeById(resId); rn._tab="activity"; renderPaneBody(rn); }
@@ -2353,6 +3330,15 @@ const AUTH={user:null,mayRun:false,configured:false,reachable:false};
 function api(path,opts){
   return fetch((CFG.backendUrl||"")+path,Object.assign({credentials:"include"},opts||{}));
 }
+/* Signing in changes which projects exist, so the account's projects are
+   pulled rather than merged: the server document is the store of record and a
+   local copy of someone else's session must not survive the switch. */
+async function reloadForAccount(){
+  await loadPersist();
+  renderProjects(); renderCrumb(); renderGraph(); applyTheme();
+  if(state.view[state.project]) applyTransform(false); else fit(false);
+  renderAuth();
+}
 async function refreshAuth(){
   try{
     const r=await api("/api/me");
@@ -2363,19 +3349,22 @@ async function refreshAuth(){
     try{ const c=await api("/api/config"); if(c.ok){ const cj=await c.json(); AUTH.configured=!!cj.authConfigured; AUTH.engine=!!cj.engine; } }catch(e){}
   }catch(e){ AUTH.reachable=false; AUTH.user=null; AUTH.mayRun=false; }
   renderAuth();
+  await reloadForAccount();
 }
 function renderAuth(){
   const av=$("#authAvatar"), nm=$("#authName"), row=$("#authRow");
   if(!av||!nm||!row) return;
+  av.classList.remove("dev");
   if(AUTH.user){
     av.textContent=AUTH.user.slice(0,2).toUpperCase();
     if(AUTH.avatar){ av.style.backgroundImage=`url(${AUTH.avatar})`; av.style.backgroundSize="cover"; av.textContent=""; }
     nm.textContent=AUTH.user; row.title="Sign out";
   }else if(!AUTH.reachable){
-    av.style.backgroundImage=""; av.textContent="–"; nm.textContent="Static preview";
+    av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Static preview";
     row.title="No server on this host — runs replay a recorded trace";
   }else if(AUTH.devOpen){
-    av.style.backgroundImage=""; av.textContent="⌂"; nm.textContent="Local development";
+    av.style.backgroundImage=""; av.textContent="DEV"; av.classList.add("dev");
+    nm.textContent="Local development";
     row.title="Running locally with no OAuth app configured — sign-in is not required here";
   }else{
     av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Sign in to save projects";
@@ -2385,6 +3374,9 @@ function renderAuth(){
   }
 }
 function authClick(){
+  openAccountMenu($("#authRow"));
+}
+function authClickLegacy(){
   if(!AUTH.reachable){ toast("No server on this host — runs replay a recorded trace"); return; }
   if(AUTH.devOpen){ toast("Local development — sign-in is not required here"); return; }
   if(AUTH.user){
@@ -2403,6 +3395,8 @@ function authClick(){
   }
 }
 document.addEventListener("DOMContentLoaded",()=>{
+  const sb=$("#settingsBtn");
+  if(sb) sb.addEventListener("click",e=>{ e.stopPropagation(); closeMenus(); openSettings(); });
   const row=$("#authRow");
   if(row){ row.addEventListener("click",authClick);
     row.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();authClick();} }); }
@@ -2432,13 +3426,19 @@ function finishRun(expId,runId,aborted){
   el.runbar.hidden=true;
   // A run that never started must not be reported as a completed one.
   if(aborted) return;
+  if(state.run.plan&&state.run.plan.mode==="literature"){
+    toast(`${runId} complete — literature review`);
+    if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
+    return;
+  }
   const resId=curProj().resultNode;
   if(resId){ setStatus(resId,"done"); togglePreview(resId,true); pulse(resId); }
-  setStatus(expId,"done");
+  if(expId) setStatus(expId,"done");
   const nextN=curProj().nodes.find(n=>n.type==="next"); if(nextN) setStatus(nextN.id,"planned");
   toast(`${runId} complete — ${state.run.mode==="live"?"live Omnigent run":"replayed trace"}`);
   // if result pane open, refresh to show fresh charts/provenance
   const sel=state.selection?nodeById(state.selection):null; if(sel&&sel.type==="result"){ renderPaneBody(sel); }
+  if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
 }
 function runReplay(expId,runId){
   const pid=curProj().id;
@@ -2479,16 +3479,34 @@ async function runViaBackend(expId,runId){
   try{
     const ctl=new AbortController(); state.run.abort=ctl;
     const res=await api("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({project:curProj().id,experiment:expId,runId,dataMode:state.dataMode,
-        question:state.question||curProj().question||""}),signal:ctl.signal});
+      body:JSON.stringify({project:curProj().id,experiment:expId,runId,        question:state.question||curProj().question||"",
+        aid:(state.opts&&state.opts.aid)||null}),signal:ctl.signal});
+    // Busy is not failure. One run happens at a time because two will not fit
+    // in the instance's memory, so wait for the slot instead of giving up --
+    // during a demo the second person should queue, not see an error.
+    if(res.status===429){
+      const j=await res.json().catch(()=>({}));
+      if(state.run.waits==null) state.run.waits=0;
+      if(state.run.waits===0) logEvent({agent:"Relay",msg:j.error||"Waiting for the current run to finish",st:"running"});
+      if(state.run.waits++ < 40 && state.run.active){
+        $("#runTxt").textContent="Waiting for "+(j.busyWith||"another run");
+        await new Promise(r=>setTimeout(r,6000));
+        return runViaBackend(expId,runId);          // try again for the slot
+      }
+      logEvent({agent:"Relay",msg:"Gave up waiting for the server",st:"failed"});
+      if(expId) setStatus(expId,"planned"); finishRun(expId,runId,true); toast("Server stayed busy");
+      return;
+    }
     // A refused run is not a dropped stream: say why instead of quietly replaying.
     if(res.status===401||res.status===403){
       const j=await res.json().catch(()=>({}));
-      logEvent({agent:"Relay",msg:j.error||"Not authorised to start a run",st:"failed"});
-      setStatus(expId,"planned"); finishRun(expId,runId,true);
-      toast(j.error||"Sign in to start a run"); refreshAuth();
+      const why=j.error||"Not authorised to start a run";
+      logEvent({agent:"Relay",msg:why,st:"failed"});
+      if(expId) setStatus(expId,"planned"); finishRun(expId,runId,true);
+      toast(why); refreshAuth();
       return;
     }
+    state.run.waits=0;
     if(!res.ok||!res.body) throw new Error("no stream");
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
     while(true){ const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
@@ -2504,7 +3522,24 @@ async function runViaBackend(expId,runId){
 }
 function applyBackendEvent(ev,expId,runId){
   if(ev.type==="status"&&ev.node) setStatus(ev.node,ev.status);
-  else if(ev.type==="act") logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
+  else if(ev.type==="act"){
+    logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
+    // A literature run has no result node, so the activity log has nowhere to
+    // show. Put the latest stage in the run bar so it is not a blank wait.
+    const sub=$("#runSub");
+    if(sub) sub.textContent="· "+(ev.agent?ev.agent+": ":"")+(ev.msg||"").slice(0,70);
+  }
+  // A research run returns a graph rather than a chart: claims, the
+  // hypotheses drawn from them, and the gap worth going after next.
+  else if(ev.type==="plan"){
+    const p=ev.data||{};
+    logEvent({agent:"Relay",
+      msg:p.mode==="literature"
+        ? `Literature review — ${p.why}`
+        : `Compound screen — ${p.why}`, st:"done"});
+    state.run.plan=p;
+  }
+  else if(ev.type==="graph"){ adoptRunGraph(ev.data); }
   else if(ev.type==="result"){
     // Adopt this run's own charts, tables and shortlist. Until a run happens
     // the canvas shows the bundled sample; from here it shows what was measured.
@@ -2521,7 +3556,7 @@ function applyBackendEvent(ev,expId,runId){
   // A server-side failure is reported as itself, not hidden behind a replay.
   else if(ev.type==="error"){
     logEvent({agent:"Relay",msg:ev.msg||"Run failed on the server",st:"failed"});
-    setStatus(expId,"failed"); state.run.failed=true;
+    if(expId) setStatus(expId,"failed"); state.run.failed=true;
     finishRun(expId,runId,true); toast(ev.msg||"Run failed");
   }
   else if(ev.type==="done"){ finishRun(expId,runId); }
@@ -2553,6 +3588,10 @@ document.addEventListener("keydown",e=>{
     if(state.pane.open){ const s=state.selection; closePane(); if(s&&nodeEls[s])nodeEls[s].focus(); return; }
   }
   if((e.key==="f"||e.key==="F")&&!e.target.matches("input,textarea")){ fit(true); }
+  if((e.key==="t"||e.key==="T")&&!e.target.matches("input,textarea")){ tidy(); }
+  if((e.key==="e"||e.key==="E")&&!e.target.matches("input,textarea")){ setEditing(!state.editing); }
+  if((e.key==="Delete"||e.key==="Backspace")&&state.selection&&!e.target.matches("input,textarea")
+     && !el.modalRoot.classList.contains("open")){ e.preventDefault(); deleteNode(state.selection); }
 });
 
 /* ========================= responsive nav =========================== */
@@ -2568,11 +3607,11 @@ async function init(){
   await loadPersist();
   applyTheme();
   updateProvenance();
-  renderProjects(); renderCrumb(); renderGraph(); renderCmdCtx();
+  renderProjects(); renderCrumb(); renderGraph(); renderCmdCtx(); syncQuestionBar();
   if(state.view[state.project]) applyTransform(false); else fit(false);
   // open the result preview by default on first load (matches the primary mock)
   if(!localStorageSeen()){ const id=curProj()&&curProj().resultNode; if(id){ previewState(id).open=true; renderPreviews(); } }
-  setTimeout(()=>{ el.canvasHint.textContent="Drag a node to move it · click a node to inspect · scroll to pan, ⌘/Ctrl+scroll to zoom"; el.canvasHint.classList.add("show"); setTimeout(()=>el.canvasHint.classList.remove("show"),5200); },700);
+  setTimeout(()=>{ el.canvasHint.textContent="Click a node to inspect · Del to remove · scroll to pan, ⌘/Ctrl+scroll to zoom"; el.canvasHint.classList.add("show"); setTimeout(()=>el.canvasHint.classList.remove("show"),5200); },700);
   scheduleMinimap();
 }
 function localStorageSeen(){ try{return !!localStorage.getItem(LSK);}catch(e){return false;} }
@@ -2608,9 +3647,9 @@ function buildFigures(){
       xlabel:"Fraction of library screened (%)", ylabel:"Enrichment factor (×)",
       caption:"Enrichment factor as a function of how deep into the ranked library the assay budget reaches, against a random-ranking control measured on the same held-out set.",
       title:"Enrichment versus screening depth"});
-  }else if(d.enrichment){
+  }else if(d&&d.enrichment){
     out.push(Object.assign({id:"enrich",kind:"enrichment",
-      caption:"Enrichment factor against screening depth. "+(d.measured?"Values are the recorded fixture run.":"Illustrative placeholder values — not a measured result."),
+      caption:"Enrichment factor against screening depth, from the run recorded in this session.",
       },d.enrichment));
   }
 
@@ -2644,9 +3683,9 @@ function buildFigures(){
   }
 
   // Figure: ranked candidates
-  if(d.candidates&&(d.candidates.rows||[]).length){
+  if(d&&d.candidates&&(d.candidates.rows||[]).length){
     out.push(Object.assign({id:"cands",kind:"candidates",
-      caption:"Top-ranked candidates with their predicted scores and uncertainty. "+(d.measured?"":"Illustrative placeholder values — not measured."),
+      caption:"Top-ranked candidates with their predicted scores and uncertainty, as ranked by the recorded run.",
       },d.candidates));
   }
   return out;
@@ -2672,7 +3711,7 @@ function list(items){
 /* Deterministic fallbacks. They are written to be honest rather than
    impressive: every clause is conditional on the data actually being there. */
 function assembledAbstract(){
-  const q=m(firstOf("question")), ex=m(firstOf("experiment")), d=curData();
+  const q=m(firstOf("question")), ex=m(firstOf("experiment"));
   const res=byType("result").map(m).find(x=>x.interp);
   const ev=m(firstOf("source"));
   const bits=[];
@@ -2680,7 +3719,7 @@ function assembledAbstract(){
   if(ev&&ev.relevance) bits.push(`Evidence base: ${ev.relevance.replace(/\.$/,"")}.`);
   if(ex.method) bits.push(`Method: ${ex.method.replace(/\.$/,"")}, with ${ex.controls||"no declared controls"}.`);
   if(res&&res.interp) bits.push(res.interp);
-  if(!d.measured) bits.push("All values shown are illustrative placeholders, not measured findings.");
+  if(!projResults()) bits.push("No run has been recorded for this project, so no measured result is reported here.");
   return bits.join(" ");
 }
 function assembledDiscussion(){
@@ -2694,9 +3733,9 @@ function assembledDiscussion(){
   return out.join("\n\n");
 }
 function assembledLimitations(){
-  const q=m(firstOf("question")), ev=m(firstOf("source")), d=curData();
+  const q=m(firstOf("question")), ev=m(firstOf("source"));
   const out=[];
-  if(!d.measured) out.push("The figures in this report are illustrative placeholders and must not be read as measured findings.");
+  if(!projResults()) out.push("This project has no recorded run, so nothing here may be read as a measured finding.");
   if(q.scope) out.push(q.scope);
   if(ev.limitations) out.push(ev.limitations);
   if(q.constraints) out.push(q.constraints);
@@ -2800,11 +3839,10 @@ function secResults(){
    .map(x=>`<tr><td>${esc(x[0])}</td><td class="num">${esc(String(x[1]))}</td></tr>`).join("");
 
   const interp=byType("result").map(m).filter(x=>x.interp);
-  const stats=(d.stats||[]).map(s=>`<tr><td>${esc(s.lab)}</td><td class="num"><b>${esc(s.val)}</b></td><td class="muted">${esc(s.sub||"")}</td></tr>`).join("");
+  const stats=((d&&d.stats)||[]).map(s=>`<tr><td>${esc(s.lab)}</td><td class="num"><b>${esc(s.val)}</b></td><td class="muted">${esc(s.sub||"")}</td></tr>`).join("");
 
   return `<section><h2>5 · Results</h2>
     ${!r?`<div class="callout warn"><b>No run recorded for this project.</b> The figures below render only what has been measured; sections without data state their absence rather than showing a placeholder curve.</div>`:""}
-    ${!d.measured&&!r?`<div class="callout warn"><b>Illustrative data.</b> Values shown come from the interface's sample mode and are not measured findings.</div>`:""}
     ${srows?table("Composition of the screened set and the train/test split.",
         `<thead><tr><th>Quantity</th><th class="num">Value</th></tr></thead>`,srows):""}
     ${mrows?table("Measured performance on the held-out split, with both negative controls.",
@@ -2900,7 +3938,7 @@ function buildPaper(){
   const p=curProj(), q=m(firstOf("question")), d=curData(), r=projResults();
   const when=new Date().toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
   const author=AUTH.user?`${esc(AUTH.user)} (GitHub)`:"Unattributed session";
-  const mode=d.measured?"Verified sample data":"Illustrative placeholder data";
+  const mode=r?"Measured — this project's recorded run":(d?"Measured — run in this session":"No run recorded");
   const runLabel=state.run.mode==="live"?"live run":(state.run.mode==="replay"?"replayed trace":"no run in this session");
   const abstract=NARRATIVE.abstract||assembledAbstract();
   const discussion=NARRATIVE.discussion||assembledDiscussion();
@@ -2941,7 +3979,7 @@ function buildPaper(){
     <footer class="p-foot">
       Generated by Relay from the project graph on ${esc(when)}.
       This is a computational triage report: it reprioritises candidates for assay and does not
-      confirm binding, efficacy or safety. ${d.measured?"":"Figures shown are illustrative placeholders."}
+      confirm binding, efficacy or safety.
     </footer>`;
 }
 

@@ -37,7 +37,14 @@ class LLM:
             self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
         elif self.provider == "openai":
             import openai
+            if not cfg.openai_api_key:
+                raise RuntimeError("Set OPENAI_API_KEY (or DATABRICKS_TOKEN for Model Serving).")
             self.client = openai.OpenAI(api_key=cfg.openai_api_key, base_url=cfg.openai_base_url)
+            # Endpoints disagree on these two. Probed on first call, then reused:
+            # current OpenAI reasoning models require max_completion_tokens, while
+            # older models and some compatible gateways only accept max_tokens.
+            self._token_param = "max_completion_tokens"
+            self._json_mode = True
         elif self.provider == "mock":
             self.client = MockLLM()
         else:
@@ -49,19 +56,83 @@ class LLM:
             self.usage["input_tokens"] += inp or 0
             self.usage["output_tokens"] += out or 0
 
-    def text(self, system: str, prompt: str, fast: bool = False, max_tokens: int = 4096) -> str:
+    def text(self, system: str, prompt: str, fast: bool = False, max_tokens: int = 4096,
+             json_mode: bool = False) -> str:
         model = self.cfg.fast_model if fast else self.cfg.model
         if self.provider == "anthropic":
             r = self.client.messages.create(model=model, max_tokens=max_tokens, system=system,
                                             messages=[{"role": "user", "content": prompt}])
             self._track(r.usage.input_tokens, r.usage.output_tokens)
             return "".join(b.text for b in r.content if b.type == "text")
-        r = self.client.chat.completions.create(
-            model=model, max_tokens=max_tokens,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}])
+        r = self._openai_create(model, system, prompt, max_tokens, json_mode, fast)
         if r.usage:
             self._track(r.usage.prompt_tokens, r.usage.completion_tokens)
         return r.choices[0].message.content or ""
+
+    def _openai_create(self, model: str, system: str, prompt: str, max_tokens: int,
+                       json_mode: bool, fast: bool = False):
+        """Call an OpenAI-compatible endpoint, adapting to what it accepts.
+
+        Two parameters vary across endpoints, so each is tried once and the
+        working choice is remembered for the rest of the run:
+
+        - Reasoning models (the gpt-5 family) require `max_completion_tokens`
+          and reject `max_tokens`; older models and gateways like Databricks
+          Model Serving are the other way round.
+        - Native JSON mode removes most malformed-JSON retries, which matters
+          because every stage of the pipeline demands parseable JSON -- but not
+          every compatible endpoint implements it.
+
+        Reasoning models also spend hidden reasoning tokens from the same
+        budget, so the cap is widened to stop a long think truncating the
+        answer to nothing.
+        """
+        import openai
+
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        swapped_token_param = False
+        widened = 0
+        for _ in range(6):  # one fallback per adaptable parameter, plus budget retries
+            reasoning_model = self._token_param == "max_completion_tokens"
+            effort = (self.cfg.fast_reasoning_effort if fast else self.cfg.reasoning_effort)
+            # Reasoning tokens are spent from the same allowance as the answer,
+            # so a reasoning model needs far more headroom than the text itself.
+            budget = max_tokens * (4 << widened) if reasoning_model else max_tokens
+            kwargs = {"model": model, "messages": messages, self._token_param: budget}
+            if json_mode and self._json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            if reasoning_model and effort:
+                kwargs["reasoning_effort"] = effort
+            try:
+                r = self.client.chat.completions.create(**kwargs)
+            except openai.BadRequestError as e:
+                before = self._token_param
+                self._adapt(str(e).lower(), e, swapped_token_param)
+                swapped_token_param = swapped_token_param or self._token_param != before
+                continue
+            # A model that thinks past its allowance returns nothing at all.
+            # Say so, rather than letting it surface as unparseable output.
+            if r.choices[0].finish_reason == "length" and not (r.choices[0].message.content or "").strip():
+                if widened < 2:
+                    widened += 1
+                    continue
+                raise RuntimeError(
+                    f"{model} hit its {budget}-token limit while reasoning and returned no answer. "
+                    f"Lower BRAIN_FAST_REASONING_EFFORT, or send smaller batches.")
+            return r
+        raise RuntimeError(f"{model}: no usable response after adapting request parameters")
+
+    def _adapt(self, msg: str, exc, swapped_token_param: bool) -> None:
+        """Turn a rejected parameter into a changed setting, or re-raise."""
+        if not swapped_token_param and ("max_tokens" in msg or "max_completion_tokens" in msg):
+            self._token_param = ("max_tokens" if self._token_param == "max_completion_tokens"
+                                 else "max_completion_tokens")
+        elif ("response_format" in msg or "json_object" in msg) and self._json_mode:
+            self._json_mode = False
+        elif "reasoning_effort" in msg:
+            self.cfg.reasoning_effort = self.cfg.fast_reasoning_effort = None
+        else:
+            raise exc
 
     def json(self, task: str, system: str, prompt: str, fast: bool = False,
              max_tokens: int = 4096, context: dict | None = None):
@@ -71,7 +142,7 @@ class LLM:
         system = system + "\n\nRespond with a single valid JSON object and nothing else."
         last_err = None
         for _ in range(2):
-            raw = self.text(system, prompt, fast=fast, max_tokens=max_tokens)
+            raw = self.text(system, prompt, fast=fast, max_tokens=max_tokens, json_mode=True)
             try:
                 return parse_json(raw)
             except (ValueError, json.JSONDecodeError) as e:
@@ -90,6 +161,11 @@ class MockLLM:
     def _terms(text: str) -> list[str]:
         return [w for w in re.findall(r"[a-z]{4,}", text.lower())
                 if w not in {"does", "what", "which", "with", "that", "from", "into", "have"}]
+
+    def refine(self, ctx):
+        q = ctx.get("question", "")
+        return {"refined": q.rstrip("?") + " (mock refinement)?", "too_broad": False,
+                "changes": ["mock: named the outcome"], "missing": []}
 
     def plan(self, ctx):
         q = ctx["question"]

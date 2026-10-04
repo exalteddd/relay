@@ -1,7 +1,7 @@
 """Relay backend: GitHub sign-in, and real runs streamed to the UI.
 
 Viewing the interface is open to anyone. *Starting a run* costs compute, so it
-requires a signed-in GitHub user (optionally one named in RELAY_ALLOWED_USERS).
+requires a signed-in GitHub user named in RELAY_ALLOWED_USERS in production.
 
 Secrets
 -------
@@ -10,7 +10,7 @@ Every secret is read from the environment and never leaves this process:
     SESSION_SECRET        signs the session cookie        (required)
     GITHUB_CLIENT_ID      OAuth app id                    (required for login)
     GITHUB_CLIENT_SECRET  OAuth app secret                (required for login)
-    RELAY_ALLOWED_USERS   optional comma-separated GitHub logins; empty = any
+    RELAY_ALLOWED_USERS   comma-separated GitHub logins; required for production runs
     ANTHROPIC_API_KEY     reserved for the Omnigent route (not used yet)
 
 The browser is never sent any of these. The GitHub access token is exchanged
@@ -27,6 +27,8 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
+import time
 from pathlib import Path
 
 import requests
@@ -37,6 +39,7 @@ from server.pipeline_runner import DEFAULT_QUESTION, engine_available, run_event
 from server.narrative import bp as narrative_bp
 from server.projects import bp as projects_bp
 from server.scaffold import bp as scaffold_bp
+from server.research_runner import research_events, resolve_mode
 
 # Load .env for local development. Real environments (Render) set these in the
 # process environment, which already-set values take precedence over.
@@ -48,6 +51,10 @@ except ImportError:  # optional: production does not need it
     pass
 
 ROOT = Path(__file__).resolve().parent.parent
+# Per-user saved graphs. A plain directory of JSON keyed by GitHub login:
+# no database to run, and the only reader is the user who owns the file.
+# Set RELAY_STATE_DIR to a mounted disk to make it survive a redeploy.
+STATE_DIR = Path(os.environ.get("RELAY_STATE_DIR", ROOT / "user_state"))
 GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
 GITHUB_USER = "https://api.github.com/user"
@@ -72,6 +79,8 @@ ALLOWED = {u.strip().lower() for u in os.environ.get("RELAY_ALLOWED_USERS", "").
 AUTH_CONFIGURED = bool(CLIENT_ID and CLIENT_SECRET)
 
 app.config.update(
+    # Large enough for a saved graph, small enough to stay a bound.
+    MAX_CONTENT_LENGTH=256 * 1024,
     SESSION_COOKIE_HTTPONLY=True,    # JS cannot read it, so XSS cannot steal it
     SESSION_COOKIE_SAMESITE="Lax",   # survives the OAuth redirect, blocks cross-site POSTs
     SESSION_COOKIE_SECURE=not IS_DEV,  # HTTPS-only off localhost
@@ -90,6 +99,38 @@ try:
 except Exception as exc:  # noqa: BLE001 - surfaced through /api/config
     STORAGE_READY = False
     print(f"[relay] storage unavailable ({store.engine_name()}): {type(exc).__name__}: {exc}")
+
+
+# One run at a time. A screen peaks around 380MB, so two at once exceed the
+# 512MB instance and the whole process is OOM-killed -- which would take the
+# bystander's run down too. Refusing the second is the kinder failure, and it
+# doubles as a cap on concurrent model spend.
+# This guards a single process; more than one worker would need shared state.
+_run_slot = threading.BoundedSemaphore(1)
+# Who holds it and since when, so a second person is told what they are
+# waiting for rather than just being refused.
+_run_holder = {"user": None, "started": 0.0}
+
+
+@app.before_request
+def check_request_origin():
+    # Cookies alone do not protect same-site requests from hostile sibling sites.
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        if request.headers.get("Sec-Fetch-Site") == "cross-site" or (
+            origin and origin != request.host_url.rstrip("/")
+        ):
+            abort(403)
+
+
+@app.after_request
+def security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if request.path.startswith(("/api/", "/auth/")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def current_user():
@@ -113,12 +154,12 @@ def dev_open_access() -> bool:
 
 
 def may_run(user: str | None) -> bool:
-    """Runs need a signed-in user, and membership of the allowlist when set."""
+    """Production runs require explicit allowlist membership."""
     if dev_open_access():
         return True
     if user is None:
         return False
-    return not ALLOWED or user.lower() in ALLOWED
+    return user.lower() in ALLOWED or (IS_DEV and not ALLOWED)
 
 
 # --- auth ---------------------------------------------------------------
@@ -129,7 +170,8 @@ def login():
     # CSRF: this value must come back unchanged on the callback.
     state = secrets.token_urlsafe(24)
     session["oauth_state"] = state
-    session["post_login"] = request.args.get("next", "/")
+    next_path = request.args.get("next", "/")
+    session["post_login"] = next_path if (next_path.startswith("/") and not next_path.startswith("//") and "\\" not in next_path and not any(ord(c) < 32 for c in next_path)) else "/"
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": request.url_root.rstrip("/") + "/auth/callback",
@@ -216,6 +258,116 @@ def config():
     )
 
 
+# --- per-user saved graphs ----------------------------------------------
+def _state_file(user: str) -> Path:
+    """One file per user. The name is derived, never taken from input."""
+    safe = "".join(c for c in user.lower() if c.isalnum() or c in "-_")[:40]
+    if not safe:
+        raise ValueError("unusable username")
+    return STATE_DIR / f"{safe}.json"
+
+
+@app.get("/api/state")
+def get_state():
+    """The signed-in user's saved graphs, or nothing if they have none yet."""
+    user = current_user()
+    if not user:
+        return jsonify(scope="local", state=None)
+    try:
+        f = _state_file(user)
+        if f.is_file():
+            return jsonify(scope="user", state=json.loads(f.read_text()))
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+    return jsonify(scope="user", state=None)
+
+
+@app.put("/api/state")
+def put_state():
+    user = current_user()
+    if not user:
+        return jsonify(error="Sign in to save your work to this account"), 401
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error="Expected a JSON object"), 400
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        f = _state_file(user)
+        # Write then replace, so an interrupted save cannot truncate the file.
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(body))
+        tmp.replace(f)
+    except (OSError, ValueError) as exc:
+        app.logger.warning("state save failed: %s", exc)
+        return jsonify(error="Could not save"), 500
+    return jsonify(ok=True, scope="user")
+
+
+@app.delete("/api/state")
+def delete_state():
+    user = current_user()
+    if not user:
+        return jsonify(error="Not signed in"), 401
+    try:
+        _state_file(user).unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
+    return jsonify(ok=True)
+
+
+# --- question refinement ------------------------------------------------
+@app.post("/api/refine-question")
+def refine_question():
+    """Sharpen a research question with one cheap model call.
+
+    Gated like a run, because it spends money — just much less of it.
+    """
+    user = current_user()
+    if not may_run(user):
+        return jsonify(error="Sign in to use this"), 401 if user is None else 403
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    if not question:
+        return jsonify(error="Nothing to sharpen"), 400
+    question = question[:500]
+    from brain import prompts
+    from brain.config import load_config
+    from brain.llm import LLM
+
+    cfg = load_config()
+    # Name the actual problem. "Could not reach the model" sent people looking
+    # for a network fault when the usual cause is an unset key on this server.
+    if cfg.provider == "openai" and not cfg.openai_api_key:
+        return jsonify(error="No model key on this server. Set OPENAI_API_KEY and redeploy."), 503
+    if cfg.provider == "anthropic" and not cfg.anthropic_api_key:
+        return jsonify(error="No model key on this server. Set ANTHROPIC_API_KEY and redeploy."), 503
+    try:
+        out = LLM(cfg).json("refine", prompts.REFINE_QUESTION, f"Question: {question}",
+                            fast=True, max_tokens=700, context={"question": question})
+    except Exception as exc:
+        app.logger.warning("refine failed: %s", exc)
+        reason = str(exc)[:140] or exc.__class__.__name__
+        return jsonify(error=f"The model call failed ({cfg.fast_model}): {reason}"), 502
+    return jsonify(
+        refined=str(out.get("refined") or question)[:500],
+        tooBroad=bool(out.get("too_broad")),
+        changes=[str(c)[:160] for c in (out.get("changes") or [])][:5],
+        missing=[str(c)[:160] for c in (out.get("missing") or [])][:5],
+    )
+
+
+@app.get("/api/resolve")
+def resolve():
+    """Which engine would answer this question. One source of truth for the
+    decision, so the interface does not keep a second copy of the rules."""
+    q = (request.args.get("q") or "").strip()[:500]
+    plan = resolve_mode(q)
+    if plan["mode"] == "screen" and not engine_available():
+        plan = {"mode": "literature", "experiment": None,
+                "why": "the screening engine is not installed on this server"}
+    return jsonify(plan)
+
+
 # --- runs ---------------------------------------------------------------
 @app.post("/api/run")
 def run():
@@ -225,7 +377,13 @@ def run():
             return jsonify(error="Sign in with GitHub to start a run", loginUrl="/auth/login"), 401
         return jsonify(error=f"{user} is not on this server's allowlist"), 403
 
+    # The global cap is sized for saved graphs; a run request is a question
+    # and a couple of fields, so hold it to the tighter bound it had before.
+    if (request.content_length or 0) > 16 * 1024:
+        return jsonify(error="Request too large"), 413
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict) or not isinstance(body.get("question", ""), str):
+        return jsonify(error="Expected a JSON object with a text question"), 400
     question = (body.get("question") or DEFAULT_QUESTION).strip()[:500]
     aid = body.get("aid")
     try:
@@ -233,14 +391,45 @@ def run():
     except (TypeError, ValueError):
         return jsonify(error="aid must be an integer PubChem assay id"), 400
 
+    if not _run_slot.acquire(blocking=False):
+        who = _run_holder["user"] or "someone"
+        elapsed = int(time.time() - (_run_holder["started"] or time.time()))
+        return jsonify(
+            error=f"{who} is already running one. Runs go one at a time on this server.",
+            busy=True, busyWith=who, elapsedSec=elapsed,
+        ), 429
+    _run_holder.update(user=user or "local", started=time.time())
+
+    # Which engine can answer this. Literature reasoning works for any
+    # question; the compound screen only for the one thing it does.
+    plan = resolve_mode(question)
+    if body.get("mode") in ("screen", "literature"):
+        plan = {**plan, "mode": body["mode"]}        # an explicit choice wins
+
     def stream():
         try:
-            for event in run_events(question=question, aid=aid):
+            yield "data: " + json.dumps({"type": "plan", "data": plan}) + "\n\n"
+            if plan["mode"] == "literature":
+                from brain.config import load_config
+                cfg = load_config()
+                if cfg.provider == "openai" and not cfg.openai_api_key:
+                    yield "data: " + json.dumps({"type": "error",
+                        "msg": "No model key on this server. Set OPENAI_API_KEY and redeploy."}) + "\n\n"
+                    return
+                events = research_events(question, cfg)
+            else:
+                events = run_events(question=question, aid=aid)
+            for event in events:
                 yield "data: " + json.dumps(event) + "\n\n"
         except GeneratorExit:  # client navigated away
             raise
         except Exception as exc:
-            yield "data: " + json.dumps({"type": "error", "msg": f"{type(exc).__name__}: {exc}"}) + "\n\n"
+            app.logger.exception("Research run failed")
+            yield "data: " + json.dumps({"type": "error", "msg": "Research run failed; check server logs."}) + "\n\n"
+        finally:
+            # Released here, not in the view: the generator outlives the request.
+            _run_holder.update(user=None, started=0.0)
+            _run_slot.release()
 
     return Response(
         stream(),
@@ -257,8 +446,11 @@ def index():
 
 @app.get("/<path:filename>")
 def static_files(filename):
-    target = (ROOT / filename).resolve()
-    if not str(target).startswith(str(ROOT)) or not target.is_file():
+    # Serve only deliberately published frontend files, never the repo root.
+    if filename != "assets/relay-mark.svg":
+        abort(404)
+    target = ROOT / filename
+    if target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):
         abort(404)
     return send_from_directory(ROOT, filename)
 
@@ -266,4 +458,8 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     print(f"Relay on http://localhost:{port}  (engine: {engine_available()}, auth: {AUTH_CONFIGURED})")
-    app.run(host="0.0.0.0", port=port, threaded=True)
+    # Localhost only by default: the dev server has no TLS and relaxed cookie
+    # rules, so it should not be reachable from the rest of the network.
+    # Set RELAY_HOST=0.0.0.0 deliberately if you need to reach it from a phone.
+    host = os.environ.get("RELAY_HOST", "127.0.0.1")
+    app.run(host=host, port=port, threaded=True)
