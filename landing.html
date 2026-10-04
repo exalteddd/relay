@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Relay — From question to evidence</title>
+    <title>relay — From question to evidence</title>
     <meta
       name="description"
-      content="Plan experiments, trace results, and build on what you find in Relay's connected research workspace."
+      content="Plan experiments, trace results, and build on what you find in relay's connected research workspace."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -31,7 +31,7 @@
         margin: 0;
         background: #fff;
         color: var(--ink);
-        font-family: "DM Sans", sans-serif;
+        font-family: "Plus Jakarta Sans", sans-serif;
         -webkit-font-smoothing: antialiased;
       }
       a {
@@ -97,8 +97,8 @@
         pointer-events: auto;
       }
       h1 {
-        font-family: "DM Serif Display", Georgia, serif;
-        font-weight: 400;
+        font-family: "Bodoni Moda", Georgia, serif;
+        font-weight: 500;
         font-size: clamp(66px, 7.25vw, 125px);
         line-height: 0.98;
         letter-spacing: -0.065em;
@@ -115,11 +115,14 @@
         white-space: nowrap;
       }
       .actions {
+        flex-wrap: wrap;
         display: flex;
         gap: 16px;
         align-items: center;
       }
       .button {
+        white-space: nowrap;
+        flex-shrink: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -275,7 +278,7 @@
         margin-bottom: 16px;
       }
       h2 {
-        font-family: "DM Serif Display", Georgia, serif;
+        font-family: "Bodoni Moda", Georgia, serif;
         font-weight: 400;
         font-size: clamp(38px, 4vw, 58px);
         letter-spacing: -0.035em;
@@ -324,7 +327,7 @@
         height: 300px;
       }
       .flow text {
-        font-family: "DM Sans", sans-serif;
+        font-family: "Plus Jakarta Sans", sans-serif;
         font-size: 13px;
         fill: var(--ink);
       }
@@ -379,11 +382,12 @@
         height: auto;
       }
       .chart text {
-        font-family: "DM Sans", sans-serif;
+        font-family: "Plus Jakarta Sans", sans-serif;
         fill: #77839a;
         font-size: 10px;
       }
       .chart-grid {
+        fill: none;
         stroke: #e8edf5;
         stroke-width: 1;
       }
@@ -521,10 +525,13 @@
           font-size: 15px;
         }
         .actions {
+          flex-wrap: wrap;
           gap: 10px;
           flex-wrap: wrap;
         }
         .button {
+          white-space: nowrap;
+          flex-shrink: 0;
           font-size: 13px;
           padding: 0 20px;
           min-height: 50px;
@@ -686,25 +693,55 @@
           display: none;
         }
       }
+      .brand .wordmark {
+        width: 145px;
+        height: 46px;
+      }
+      footer {
+        align-items: center;
+        padding-top: 42px;
+        padding-bottom: 42px;
+      }
+      .footer-identity {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+      footer .brand .wordmark {
+        width: 190px;
+        height: 60px;
+      }
+      @media (max-width: 700px) {
+        .brand .wordmark {
+          width: 112px;
+          height: 36px;
+        }
+        .footer-identity {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 14px;
+        }
+        footer {
+          font-size: 10px;
+        }
+      }
     </style>
   </head>
   <body>
     <header>
-      <a class="brand" href="/" aria-label="Relay home"
-        ><svg viewBox="0 0 44 46" aria-hidden="true">
-          <path
-            d="M10 33 24 10 34 36Z"
-            fill="none"
-            stroke="#1264ff"
-            stroke-width="3"
-          />
-          <g fill="#1264ff">
-            <circle cx="10" cy="33" r="8" />
-            <circle cx="24" cy="10" r="8" />
-            <circle cx="34" cy="36" r="8" />
-          </g></svg
-        >relay</a
-      >
+      <a class="brand" href="/" aria-label="relay home"
+        ><svg
+          class="wordmark"
+          viewBox="260 250 1030 320"
+          role="img"
+          aria-label="relay"
+        >
+          <image
+            href="/assets/relay-brand-reference.png"
+            width="1536"
+            height="1024"
+          /></svg
+      ></a>
       <nav aria-label="Main navigation">
         <a href="/workspace">Projects</a
         ><a class="signin" href="/auth/login?next=/workspace">Sign in</a>
@@ -795,7 +832,7 @@
               ><small>Findings and<br />implications.</small>
             </div></a
           >
-          <a class="tree-card question" href="/workspace"
+          <a class="tree-card question" href="#research-preview"
             ><svg
               viewBox="0 0 24 24"
               fill="none"
@@ -850,10 +887,11 @@
                 data-step="question"
                 aria-label="Inspect research question"
               >
-                <rect x="5" y="118" width="140" height="64" />
+                <rect x="5" y="113" width="140" height="74" rx="10" />
                 <text x="20" y="144">Question</text>
-                <text class="sub" x="20" y="164">
-                  Where does the model fail?
+                <text class="sub" x="20" y="159">
+                  <tspan x="20" dy="0">Where does the</tspan>
+                  <tspan x="20" dy="13">model fail?</tspan>
                 </text>
               </g>
               <g
@@ -911,7 +949,7 @@
                   viewBox="0 0 350 170"
                   aria-label="Illustrative chart: error decreases as targeted examples increase"
                 >
-                  <g class="chart-grid">
+                  <g class="chart-grid" fill="none">
                     <path d="M35 15V135H335M35 35H335M35 70H335M35 105H335" />
                   </g>
                   <path
@@ -948,7 +986,7 @@
               viewBox="0 0 550 225"
               aria-label="Illustrative model error by chemical family"
             >
-              <g class="chart-grid">
+              <g class="chart-grid" fill="none">
                 <path d="M55 15V180H530M55 45H530M55 90H530M55 135H530" />
               </g>
               <g fill="#b9d2ff">
@@ -1019,8 +1057,22 @@
       </section>
     </main>
     <footer>
-      <span>relay</span
-      ><a href="https://github.com/exalteddd/relay">GitHub ↗</a>
+      <div class="footer-identity">
+        <a class="brand" href="/" aria-label="relay home"
+          ><svg
+            class="wordmark"
+            viewBox="260 250 1030 320"
+            role="img"
+            aria-label="relay"
+          >
+            <image
+              href="/assets/relay-brand-reference.png"
+              width="1536"
+              height="1024"
+            /></svg></a
+        ><span>© 2026 relay. All rights reserved.</span>
+      </div>
+      <a href="https://github.com/exalteddd/relay">GitHub ↗</a>
     </footer>
     <script>
       (() => {
