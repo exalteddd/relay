@@ -26,5 +26,13 @@ services:
         sync: false
       - key: RELAY_ALLOWED_USERS
         sync: false
+      # Model access. The research pipeline reads these; the compound screen
+      # does not need them.
+      - key: BRAIN_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BRAIN_FAST_REASONING_EFFORT
+        value: low
       - key: ANTHROPIC_API_KEY
         sync: false
