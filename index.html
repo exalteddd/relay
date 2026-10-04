@@ -352,7 +352,9 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .ctx-chip .x{color:var(--ink-3);font-weight:700}
 .cmd-wrap{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 16px;box-shadow:var(--shadow-md)}
 .cmd-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring),var(--shadow-md)}
-.cmd-wrap .plus{color:var(--ink-3);flex:0 0 auto}
+.cmd-wrap .plus-btn{display:grid;place-items:center;width:26px;height:26px;flex:0 0 auto;padding:0;
+  background:none;border:0;border-radius:7px;color:var(--ink-3);cursor:pointer;transition:background .14s,color .14s}
+.cmd-wrap .plus-btn:hover{background:var(--surface-2);color:var(--accent)}
 .cmd-wrap input{flex:1;border:0;background:transparent;font:inherit;color:var(--ink);padding:5px 0}
 .cmd-wrap input::placeholder{color:var(--ink-3)}
 .cmd-wrap input:focus{outline:none}
@@ -493,19 +495,22 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .modal-body{padding:4px 22px 8px}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px 20px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--surface) 24%)}
 .field{margin-bottom:14px}
+.section .field:last-child{margin-bottom:0}
 .field label.flab{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
 .field .fval{font-size:13.5px;color:var(--ink)}
-.node-form input,.node-form textarea,.node-form select{
+.node-form input,.node-form textarea,.node-form select,
+.modal-body .field input,.modal-body .field textarea,.modal-body .field select{
   width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--ink);
   background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
   transition:border-color .14s,box-shadow .14s;
 }
-.node-form input:focus,.node-form textarea:focus,.node-form select:focus{
+.node-form input:focus,.node-form textarea:focus,.node-form select:focus,
+.modal-body .field input:focus,.modal-body .field textarea:focus,.modal-body .field select:focus{
   outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);
 }
-.node-form input,.node-form textarea{min-height:40px}
-.node-form textarea{resize:vertical;line-height:1.5;min-height:76px}
-.node-form select{
+.node-form input,.node-form textarea,.modal-body .field input,.modal-body .field textarea{min-height:40px}
+.node-form textarea,.modal-body .field textarea{resize:vertical;line-height:1.5;min-height:76px}
+.node-form select,.modal-body .field select{
   appearance:none;-webkit-appearance:none;min-height:40px;line-height:1.5;
   padding-right:34px;cursor:pointer;
   background-color:var(--surface-2);
@@ -516,6 +521,11 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .menu .mi.danger{color:#c0392b}
 .menu .mi.danger:hover{background:rgba(192,57,43,.1)}
 :root[data-theme="dark"] .menu .mi.danger{color:#ff8a7a}
+.cog-btn{margin-left:auto;display:grid;place-items:center;width:22px;height:22px;padding:0;
+  background:none;border:0;color:var(--ink-3);cursor:pointer;opacity:.75;transition:color .14s,opacity .14s}
+.cog-btn svg{width:16px;height:16px}
+.cog-btn:hover{color:var(--accent);opacity:1}
+.cog-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
 button.brand{width:100%;background:transparent;border:0;cursor:pointer;text-align:left}
 button.brand:hover .wordmark{color:var(--accent-strong)}
 .form-error{margin-top:4px;font-size:12.5px;color:#c0392b;font-weight:600}
@@ -636,8 +646,8 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
       <div class="foot-row" id="authRow" role="button" tabindex="0" title="Sign in with GitHub">
         <span class="avatar" id="authAvatar">?</span>
         <span id="authName">Not signed in</span>
-        <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings" style="margin-left:auto;width:26px;height:26px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto" title="Settings"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        <button class="cog-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 17 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
         </button>
       </div>
     </div>
@@ -720,8 +730,10 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
         <div class="overlay cmdbar">
           <div class="cmd-ctx" id="cmdCtx"></div>
           <div class="cmd-wrap">
-            <svg class="plus" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            <input id="cmdInput" placeholder="Ask or add evidence…" autocomplete="off" aria-label="Command">
+            <button class="plus-btn" id="cmdPlus" title="Add a node" aria-label="Add a node" aria-haspopup="menu">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <input id="cmdInput" placeholder="Ask a research question…" autocomplete="off" aria-label="Research question">
             <button class="send-btn" id="cmdSend" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             </button>
@@ -972,6 +984,8 @@ let state={
   previews:{},           // {pid:{nid:{open,x,y,w,h,tab}}}
   run:{active:false,log:[],mode:null,id:3,timers:[],abort:null},
   deletedProjects:[],
+  question:null,
+  opts:{aid:null,autoTidy:false},   // user-adjustable run options
   editing:false        // locked by default: structure is read-only and auto-spaced
 };
 function curProj(){return state.projects[state.project];}
@@ -992,6 +1006,8 @@ function loadPersist(){
     if(p.dataMode) state.dataMode = (p.dataMode==="live"&&!CHART_DATA.live) ? "verified" : p.dataMode;
     if(p.theme) state.theme=p.theme;
     if(typeof p.editing==="boolean") state.editing=p.editing;
+    if(typeof p.question==="string") state.question=p.question;
+    if(p.opts) state.opts=Object.assign(state.opts,p.opts);
     if(p.project && state.projects[p.project]) state.project=p.project;
     if(p.view) state.view=p.view;
     if(p.previews) state.previews=p.previews;
@@ -1034,6 +1050,7 @@ function savePersist(){
       }
       const payload={
         dataMode:state.dataMode,theme:state.theme,project:state.project,editing:state.editing,
+        question:state.question,opts:state.opts,
         userProjects:PROJECT_ORDER.filter(id=>!BASE[id]).map(id=>state.projects[id]).filter(Boolean),
         deletedProjects:state.deletedProjects||[],
         view:state.view,previews:state.previews,pos,extraNodes,extraEdges
@@ -1714,27 +1731,23 @@ function renderCmdCtx(){
     el.cmdCtx.appendChild(c);
   }
 }
+/* The bar asks the lab a question. It used to guess from the wording whether
+   you meant a note, some evidence or a question, which made it a worse way of
+   adding a node than the add menu beside it. Adding now lives on the plus. */
 function sendCmd(){
-  const inp=$("#cmdInput"); const t=inp.value.trim(); if(!t)return;
-  // A question is the thing the lab actually answers, so it becomes the run's
-  // question rather than another sticky note on the canvas.
-  const isQuestion=/\?\s*$/.test(t)||/^(which|what|how|why|does|do|is|are|can|should)\b/i.test(t);
-  if(isQuestion){
-    state.question=t; inp.value="";
-    updateProvenance&&updateProvenance();
-    if(state.run.active){ toast("Question set — applies to the next run"); return; }
-    // Still goes through the approval gate; a typed question does not skip it.
-    openRunModal(curProj().primaryExp);
+  const inp=$("#cmdInput"); const t=inp.value.trim(); if(!t) return;
+  state.question=t; inp.value="";
+  renderCmdCtx(); savePersist();
+  if(state.run.active){ toast("Question set — it applies to the next run"); return; }
+  const exp=curProj().primaryExp && nodeById(curProj().primaryExp);
+  if(!exp){
+    toast("Question saved. This project has no experiment to run yet.");
     return;
   }
-  // Typed text seeds the form rather than becoming a node outright, so an
-  // added node always carries the detail its type is rendered from.
-  const isEvidence=/source|evidence|paper|cite|doi|dataset/i.test(t);
-  inp.value="";
-  if(isEvidence) openNodeForm("source",{title:t});
-  else openNodeForm("note",{title:t});
+  openRunModal(exp.id);   // still goes through the approval gate
 }
 $("#cmdSend").addEventListener("click",sendCmd);
+$("#cmdPlus").addEventListener("click",e=>{ e.stopPropagation(); openAddNodeMenu($("#cmdPlus")); });
 $("#cmdInput").addEventListener("keydown",e=>{ if(e.key==="Enter")sendCmd(); });
 
 /* ============================== add node ============================== */
@@ -2200,11 +2213,16 @@ function updateProvenance(){
   if(state.run.active){ el.provText.textContent = state.run.mode==="live"?"Live Omnigent run":"Replaying trace"; el.provTextLong.textContent=""; }
   else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent="· "+d.tag; }
 }
-$("#addNode").addEventListener("click",()=>{
-  const types=[["question","Question"],["source","Source / evidence"],["hypothesis","Hypothesis"],["experiment","Experiment"],["result","Result"],["note","Note"]];
-  openMenu($("#addNode"),`<div class="m-head">Add node</div>${types.map(([t,l])=>`<button class="mi" data-add="${t}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(t)}"></span><span>${esc(l)}</span></button>`).join("")}`,
+/* One add-node menu, opened from the toolbar or the plus in the ask bar. */
+function openAddNodeMenu(anchor){
+  const types=[["question","Question"],["source","Source / evidence"],["hypothesis","Hypothesis"],
+               ["experiment","Experiment"],["result","Result"],["note","Note"]];
+  openMenu(anchor,`<div class="m-head">Add node</div>${types.map(([t,l])=>
+    `<button class="mi" data-add="${t}"><span class="node-dot" style="width:9px;height:9px;background:${dotColor(t)}"></span><span>${esc(l)}</span></button>`).join("")}`,
     m=>{ $$("[data-add]",m).forEach(b=>b.addEventListener("click",()=>{ closeMenus(); openNodeForm(b.dataset.add); })); });
-});
+}
+$("#addNode").addEventListener("click",()=>openAddNodeMenu($("#addNode")));
+
 /* ============================== projects =============================== */
 function createProject(name,question){
   const id="p-"+Math.random().toString(36).slice(2,7);
@@ -2320,27 +2338,60 @@ $("#brand").addEventListener("click",()=>{
 /* ============================== settings =============================== */
 function openSettings(){
   const sysTheme=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
+  const o=state.opts||(state.opts={});
   modal(`
-    <div class="modal-head"><div><h2>Settings</h2><p>These apply to this browser.</p></div>
+    <div class="modal-head"><div><h2>Settings</h2><p>${AUTH.user?`Saved to your account.`:`Saved in this browser.`}</p></div>
       <button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="modal-body">
-      <div class="field"><label class="flab">Appearance</label>
-        <select data-s="theme">
-          <option value="">Match system (${sysTheme})</option>
-          <option value="light"${state.theme==="light"?" selected":""}>Light</option>
-          <option value="dark"${state.theme==="dark"?" selected":""}>Dark</option>
-        </select></div>
-      <div class="field"><label class="flab">Diagram</label>
-        <select data-s="editing">
-          <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
-          <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
-        </select></div>
+
+      <div class="section"><h3>Research runs</h3>
+        <div class="field"><label class="flab">Default question</label>
+          <textarea data-s="question" rows="2" placeholder="Which untested compounds are most likely to inhibit NDM-1?">${esc(state.question||"")}</textarea></div>
+        <div class="field"><label class="flab">Compound data</label>
+          <select data-s="aid">
+            <option value=""${!o.aid?" selected":""}>Bundled fixture — offline, reproducible</option>
+            <option value="live"${o.aid?" selected":""}>Live PubChem assay — needs an assay id</option>
+          </select></div>
+        <div class="field" data-when="aid"${o.aid?"":' hidden'}><label class="flab">PubChem BioAssay ID</label>
+          <input data-s="aidNum" inputmode="numeric" value="${esc(o.aid||"")}" placeholder="1259411"></div>
+        <div class="field"><label class="flab">After a run finishes</label>
+          <select data-s="autoTidy">
+            <option value="no"${o.autoTidy?"":" selected"}>Leave the layout alone</option>
+            <option value="yes"${o.autoTidy?" selected":""}>Re-space the graph automatically</option>
+          </select></div>
+      </div>
+
+      <div class="section"><h3>Diagram</h3>
+        <div class="field"><label class="flab">Mode</label>
+          <select data-s="editing">
+            <option value="locked"${!state.editing?" selected":""}>Locked — read only, auto-spaced</option>
+            <option value="editing"${state.editing?" selected":""}>Editing — drag and reconnect</option>
+          </select></div>
+        <div class="field"><label class="flab">Results shown</label>
+          <select data-s="dataMode">
+            <option value="verified"${state.dataMode==="verified"?" selected":""}>Verified sample</option>
+            <option value="illustrative"${state.dataMode==="illustrative"?" selected":""}>Illustrative placeholders</option>
+            ${CHART_DATA.live?`<option value="live"${state.dataMode==="live"?" selected":""}>This run (measured)</option>`:""}
+          </select></div>
+      </div>
+
+      <div class="section"><h3>Appearance</h3>
+        <div class="field"><label class="flab">Theme</label>
+          <select data-s="theme">
+            <option value="">Match system (${sysTheme})</option>
+            <option value="light"${state.theme==="light"?" selected":""}>Light</option>
+            <option value="dark"${state.theme==="dark"?" selected":""}>Dark</option>
+          </select></div>
+      </div>
+
       <div class="section"><h3>Account</h3><dl class="kv">
         <dt>Signed in as</dt><dd>${esc(AUTH.user||(AUTH.devOpen?"local development":"not signed in"))}</dd>
         <dt>Can start runs</dt><dd>${AUTH.mayRun?"yes":"no"}</dd>
-        <dt>Server</dt><dd>${AUTH.reachable?(AUTH.engine?"engine available":"no engine"):"static — runs replay a trace"}</dd>
+        <dt>Engine</dt><dd>${AUTH.reachable?(AUTH.engine?"available on this server":"not installed on this server"):"no server — runs replay a trace"}</dd>
         <dt>Graphs saved</dt><dd>${AUTH.user?"to your account — they follow you to another browser":"in this browser only"}</dd>
-      </dl></div>
+      </dl>
+      ${actionRow(AUTH.user?[{id:"switch",label:"Switch account"}]:[{id:"switch",label:"Sign in"}])}</div>
+
       <div class="section"><h3>Keyboard</h3><dl class="kv">
         <dt>F</dt><dd>Fit the graph to the screen</dd>
         <dt>T</dt><dd>Tidy the layout</dd>
@@ -2348,6 +2399,7 @@ function openSettings(){
         <dt>Del</dt><dd>Delete the selected node</dd>
         <dt>Esc</dt><dd>Close the pane or menu</dd>
       </dl></div>
+
       <div class="section"><h3>Local data</h3>
         <div class="prose"><p>${AUTH.user
             ? "Signed in, so your graphs are saved to your account and load on any browser you sign in from. They are visible only to you."
@@ -2357,11 +2409,27 @@ function openSettings(){
     </div>
     <div class="modal-foot"><button class="btn primary" data-close>Done</button></div>
   `,root=>{
-    root.querySelector('[data-s="theme"]').addEventListener("change",e=>{
-      state.theme=e.target.value||null; applyTheme(); savePersist(); renderEdges(); renderMinimap();
+    const sel=k=>root.querySelector(`[data-s="${k}"]`);
+    const save=()=>savePersist();
+    sel("theme").addEventListener("change",e=>{
+      state.theme=e.target.value||null; applyTheme(); renderEdges(); renderMinimap(); save();
     });
-    root.querySelector('[data-s="editing"]').addEventListener("change",e=>{
-      setEditing(e.target.value==="editing");
+    sel("editing").addEventListener("change",e=>setEditing(e.target.value==="editing"));
+    sel("dataMode").addEventListener("change",e=>setDataMode(e.target.value));
+    sel("question").addEventListener("input",e=>{ state.question=e.target.value.trim(); renderCmdCtx(); save(); });
+    sel("autoTidy").addEventListener("change",e=>{ state.opts.autoTidy=e.target.value==="yes"; save(); });
+    sel("aid").addEventListener("change",e=>{
+      const live=e.target.value==="live";
+      root.querySelector('[data-when="aid"]').hidden=!live;
+      if(!live){ state.opts.aid=null; sel("aidNum").value=""; }
+      save();
+    });
+    sel("aidNum").addEventListener("input",e=>{
+      const v=e.target.value.replace(/[^0-9]/g,""); e.target.value=v;
+      state.opts.aid=v||null; save();
+    });
+    root.querySelector('[data-paneact="switch"]')?.addEventListener("click",()=>{
+      closeModal(); openAccountMenu($("#authRow"));
     });
     root.querySelector('[data-paneact="wipe"]')?.addEventListener("click",()=>{
       if(!confirm("Clear every graph, added node and layout stored in this browser?")) return;
@@ -2579,6 +2647,7 @@ function finishRun(expId,runId,aborted){
   toast(`${runId} complete — ${state.run.mode==="live"?"live Omnigent run":"replayed trace"}`);
   // if result pane open, refresh to show fresh charts/provenance
   const sel=state.selection?nodeById(state.selection):null; if(sel&&sel.type==="result"){ renderPaneBody(sel); }
+  if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
 }
 function runReplay(expId,runId){
   const pid=curProj().id;
@@ -2620,7 +2689,8 @@ async function runViaBackend(expId,runId){
     const ctl=new AbortController(); state.run.abort=ctl;
     const res=await api("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({project:curProj().id,experiment:expId,runId,dataMode:state.dataMode,
-        question:state.question||curProj().question||""}),signal:ctl.signal});
+        question:state.question||curProj().question||"",
+        aid:(state.opts&&state.opts.aid)||null}),signal:ctl.signal});
     // Busy is not failure. One run happens at a time because two will not fit
     // in the instance's memory, so wait for the slot instead of giving up --
     // during a demo the second person should queue, not see an error.
