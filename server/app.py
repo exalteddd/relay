@@ -495,7 +495,7 @@ def workspace():
 @app.get("/<path:filename>")
 def static_files(filename):
     # Serve only deliberately published frontend files, never the repo root.
-    if filename != "assets/relay-mark.svg":
+    if filename not in {"assets/relay-mark.svg", "assets/relay-brand-reference.png"}:
         abort(404)
     target = ROOT / filename
     if target.is_symlink() or not target.resolve().is_relative_to(ROOT.resolve()):
