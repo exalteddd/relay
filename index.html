@@ -50,6 +50,15 @@
   --series-1:#2f66ff;      /* proposed method */
   --series-1-band:rgba(47,102,255,.14);
   --series-2:#9aa6bd;      /* baseline / random */
+  /* Extended categorical ramp for the report figures. Ordered so that any
+     two adjacent series stay distinguishable in greyscale print as well as
+     on screen, and so the first three carry the most weight. */
+  --series-3:#12b5a5;      /* secondary measure  */
+  --series-4:#e8544a;      /* alert / critical   */
+  --series-5:#f0a21c;      /* tertiary           */
+  --series-6:#8b5cf6;      /* quaternary         */
+  --series-3-band:rgba(18,181,165,.16);
+  --series-4-band:rgba(232,84,74,.14);
   --chart-grid:#e7edf6;
   --chart-axis:#aeb9cc;
 
@@ -69,6 +78,8 @@
     --accent:#5b8bff; --accent-strong:#7aa0ff; --accent-soft:#17243d; --accent-ring:rgba(91,139,255,.4);
     --st-planned:#7f8da6; --st-running:#5b8bff; --st-done:#34b98a; --st-failed:#f0697a; --st-await:#eaa63a;
     --series-1:#5b8bff; --series-1-band:rgba(91,139,255,.18); --series-2:#6b7890;
+    --series-3:#2dd4bf; --series-4:#f87171; --series-5:#fbbf24; --series-6:#a78bfa;
+    --series-3-band:rgba(45,212,191,.18); --series-4-band:rgba(248,113,113,.16);
     --chart-grid:#222e42; --chart-axis:#44526b;
     --shadow-sm:0 1px 2px rgba(0,0,0,.4);
     --shadow-md:0 8px 22px rgba(0,0,0,.5);
@@ -83,6 +94,8 @@
   --accent:#5b8bff; --accent-strong:#7aa0ff; --accent-soft:#17243d; --accent-ring:rgba(91,139,255,.4);
   --st-planned:#7f8da6; --st-running:#5b8bff; --st-done:#34b98a; --st-failed:#f0697a; --st-await:#eaa63a;
   --series-1:#5b8bff; --series-1-band:rgba(91,139,255,.18); --series-2:#6b7890;
+    --series-3:#2dd4bf; --series-4:#f87171; --series-5:#fbbf24; --series-6:#a78bfa;
+    --series-3-band:rgba(45,212,191,.18); --series-4-band:rgba(248,113,113,.16);
   --chart-grid:#222e42; --chart-axis:#44526b;
   --shadow-sm:0 1px 2px rgba(0,0,0,.4);
   --shadow-md:0 8px 22px rgba(0,0,0,.5);
@@ -270,6 +283,32 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .edge-label-bg{fill:var(--surface);opacity:0;transition:opacity .15s}
 .edge-g.show .edge-label,.edge-g.show .edge-label-bg{opacity:1}
 .edge-g.show .edge-label-bg{opacity:.92}
+
+/* ---- text selection ----
+   The canvas is a diagram, not a document. Dragging across it used to sweep up
+   everything in the layer: node chrome, the status chips, and -- worse -- text
+   that is in the DOM but invisible. Every edge carries an `opacity:0` label
+   ("uses", "tests", "supports"), and the canvas hint sits at `opacity:0`
+   holding a full sentence, so a copy came out full of words that are nowhere
+   on screen. `pointer-events:none` does not help: selection ignores it.
+
+   So the whole canvas is unselectable, and selection is handed back only to
+   the two elements that hold a node's actual words. The detail pane is left
+   alone -- that is a reading surface and should stay fully selectable. */
+#canvas,#world,#edges,#nodes,.edge-label,.edge-label-bg,.canvas-hint,#minimap{
+  -webkit-user-select:none;user-select:none;
+}
+.node-head,.node-foot,.node-dot,.node-type-tag,.status-chip{
+  -webkit-user-select:none;user-select:none;
+}
+.node-title,.node-sum{
+  -webkit-user-select:text;user-select:text;cursor:text;
+}
+/* Keeps a drag that starts in one node's title from running on into the next
+   one. Browsers without `contain` simply drop this line and fall back to the
+   `user-select:none` on .node, which still blocks the chrome and the hidden
+   labels -- the part that actually looked broken. */
+.node{user-select:contain}
 
 /* ---- inline preview card ---- */
 .preview{
@@ -493,6 +532,116 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 .runbar .r-cancel{font-size:12px;font-weight:700;color:var(--st-failed);background:transparent;border:0;padding:5px 9px;border-radius:7px}
 .runbar .r-cancel:hover{background:color-mix(in srgb,var(--st-failed) 12%,transparent)}
 
+/* ======================= report (export view) =========================
+   The graph is the workspace; this is the deliverable. It renders the whole
+   project as a paper and is what the browser prints, so the same markup is
+   both the on-screen preview and the PDF. Charts are already inline SVG, so
+   they print as vector -- no rasterising, no charting library. */
+.report-ov{position:fixed;inset:0;z-index:300;background:var(--bg);overflow:auto;display:none}
+.report-ov.open{display:block}
+.report-bar{
+  position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;
+  padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--line);
+}
+.report-bar .sp{margin-left:auto}
+.report-bar .r-note{font-size:12px;color:var(--ink-3)}
+.paper{
+  max-width:50rem;margin:26px auto 60px;background:var(--surface);
+  border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-sm);
+  padding:52px 58px 64px;color:var(--ink);
+  font-size:13.6px;line-height:1.62;
+}
+.paper h1{font-size:25px;line-height:1.22;margin:0 0 6px;letter-spacing:-.015em}
+.paper .p-lede{font-size:14.6px;color:var(--ink-2);margin:0 0 16px;line-height:1.5}
+.paper .p-meta{
+  display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--ink-3);
+  padding:12px 0 0;border-top:1px solid var(--line-soft);margin-bottom:26px;
+}
+.paper .p-meta b{color:var(--ink-2);font-weight:650}
+.paper h2{
+  font-size:14.5px;margin:30px 0 8px;letter-spacing:.01em;
+  padding-bottom:5px;border-bottom:1px solid var(--line-soft);
+}
+.paper h3{font-size:13px;margin:17px 0 5px;color:var(--ink)}
+.paper p{margin:0 0 10px}
+.paper ul{margin:0 0 10px;padding-left:19px}
+.paper li{margin:2px 0}
+.paper .muted{color:var(--ink-2)}
+.paper table{width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:12.4px}
+.paper th,.paper td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.paper th{font-weight:700;color:var(--ink-2);border-bottom:1px solid var(--line)}
+.paper td.num,.paper th.num{text-align:right;font-variant-numeric:tabular-nums}
+.fig-legend{
+  display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:center;
+  margin-top:6px;font-size:11px;color:var(--ink-2);
+}
+.fig-legend .lg-item{display:inline-flex;align-items:center;gap:6px}
+.fig-legend .lg-sw{width:10px;height:10px;border-radius:2.5px;flex:0 0 auto}
+.fig-empty{
+  padding:22px 16px;text-align:center;font-size:12px;color:var(--ink-3);
+  border:1px dashed var(--line);border-radius:8px;
+}
+.paper .fig{margin:14px 0 18px}
+.paper .fig .chart{border:1px solid var(--line-soft);border-radius:8px;padding:14px 12px;background:var(--surface)}
+.paper .fig .chart svg{display:block;width:100%;height:auto}
+.paper .fig figcaption{font-size:11.8px;color:var(--ink-2);margin-top:8px;line-height:1.48;text-align:left}
+.paper .fig figcaption b{color:var(--ink)}
+/* Table captions sit above the table, figure captions below it — the
+   convention in the journals this is meant to read like. */
+.paper .tbl-wrap{margin:14px 0 18px}
+.paper .tbl-cap{font-size:11.8px;color:var(--ink-2);margin-bottom:6px;line-height:1.48}
+.paper .tbl-cap b{color:var(--ink)}
+.paper .tbl-wrap table{margin:0}
+.paper .reflist{margin:10px 0 0;padding-left:26px;font-size:12.4px;line-height:1.55}
+.paper .reflist li{margin:5px 0}
+.paper .reflist .ref-src{font-weight:600}
+.paper .fig-empty{margin:4px 0}
+.paper .audit-list{margin:8px 0 0;padding-left:20px;font-size:12.2px;line-height:1.5}
+.paper .audit-list li{margin:4px 0}
+.paper .callout{
+  border-left:3px solid var(--accent);background:var(--accent-soft);
+  padding:10px 14px;border-radius:0 7px 7px 0;margin:12px 0;
+}
+.paper .warn{border-left-color:var(--st-await);background:color-mix(in srgb,var(--st-await) 9%,transparent)}
+.paper .tag{
+  display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;padding:2px 7px;border-radius:999px;border:1px solid var(--line);
+  color:var(--ink-2);
+}
+.paper .tag.sel{color:var(--st-done);border-color:color-mix(in srgb,var(--st-done) 40%,transparent)}
+.paper .byline-gen{font-size:11.5px;color:var(--ink-3);font-style:italic}
+.paper footer.p-foot{margin-top:34px;padding-top:12px;border-top:1px solid var(--line-soft);font-size:11.4px;color:var(--ink-3)}
+
+/* ---- print ----
+   Only the paper survives. Colours are pinned to light values because a PDF
+   is printed on white regardless of the theme the author was using. */
+@page{size:A4;margin:17mm 15mm}
+@media print{
+  html,body{background:#fff}
+  .app,.toast-wrap,.report-bar{display:none!important}
+  .report-ov{position:static;display:block!important;overflow:visible;background:#fff}
+  .paper{
+    max-width:none;margin:0;padding:0;border:0;border-radius:0;box-shadow:none;
+    background:#fff;color:#111;font-size:10.6pt;line-height:1.5;
+  }
+  .paper h1{font-size:19pt}
+  .paper h2{font-size:12pt;margin:16pt 0 6pt;break-after:avoid;page-break-after:avoid}
+  .paper h3{font-size:10.8pt;break-after:avoid;page-break-after:avoid}
+  .paper .p-lede{font-size:11pt;color:#333}
+  .paper .p-meta,.paper .muted,.paper figcaption,.paper .byline-gen,.paper .p-foot{color:#444}
+  .paper th{color:#222}
+  .paper th,.paper td{border-color:#ccc}
+  .paper .fig,.paper table,.paper .callout,.paper figure{break-inside:avoid;page-break-inside:avoid}
+  .paper tr{break-inside:avoid;page-break-inside:avoid}
+  .paper section{break-inside:auto}
+  .paper .sec-break{break-before:page;page-break-before:page}
+  /* SVG charts carry theme variables; give them printable fallbacks. */
+  .paper .chart svg{max-width:100%;height:auto}
+  .paper .callout{background:#f4f6f8;border-left-color:#555}
+  .paper .warn{background:#fdf6e9;border-left-color:#8a6d1f}
+  a{color:inherit;text-decoration:none}
+}
+
 /* empty / hint */
 .canvas-hint{position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:5;font-size:12px;color:var(--ink-3);background:color-mix(in srgb,var(--surface) 80%,transparent);padding:5px 12px;border-radius:999px;border:1px solid var(--line-soft);pointer-events:none;opacity:0;transition:opacity .3s}
 .canvas-hint.show{opacity:1}
@@ -602,6 +751,10 @@ button{font-family:inherit;color:inherit;cursor:pointer}
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z"/></svg>
           <span class="btn-label">Run</span>
         </button>
+        <button class="btn" id="reportBtn" title="Open the research report">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+          <span class="btn-label">Report</span>
+        </button>
         <button class="icon-btn" id="shareBtn" title="Share" aria-label="Share" style="width:36px;height:36px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
         </button>
@@ -679,6 +832,28 @@ button{font-family:inherit;color:inherit;cursor:pointer}
 </div>
 
 <div class="modal-root" id="modalRoot" aria-hidden="true"></div>
+<!-- The exported deliverable. Hidden until Report is pressed; the only thing
+     that survives @media print, so what you preview is what the PDF contains. -->
+<div class="report-ov" id="reportOv" role="dialog" aria-modal="true" aria-label="Research report">
+  <div class="report-bar">
+    <button class="btn" id="reportClose">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      <span class="btn-label">Back to graph</span>
+    </button>
+    <span class="r-note" id="reportNote"></span>
+    <span class="sp"></span>
+    <button class="btn" id="reportWrite" title="Draft abstract, discussion and limitations from this project">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5zM2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      <span class="btn-label">Write narrative</span>
+    </button>
+    <button class="btn primary" id="reportPrint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+      <span class="btn-label">Export PDF</span>
+    </button>
+  </div>
+  <article class="paper" id="paper"></article>
+</div>
+
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
 <script>
@@ -770,6 +945,15 @@ function P(id,type,title,summary,status,x,y,meta){return {id,type,title,summary,
 const BASE={
   ndm1:{
     id:"ndm1", name:"NDM-1", icon:"flask", run:"Experiment 03", primaryExp:"exp", resultNode:"res",
+    // Recorded output of the bundled fixture run (medlab/relay_data, run.json).
+    // Stored as data rather than prose so the report's figures and tables read
+    // the same numbers the pipeline wrote. A live run overwrites this wholesale.
+    results:{
+      source:"synthetic_fixture", n_compounds:5600, n_active:553, base_rate:0.0888,
+      n_train:3393, n_test:2207, roc_auc:0.752, ef_top1pct:11.26, ef_top5pct:7.17,
+      control_random_ef1:1.05, control_yscramble_auc:0.52,
+      figures:{}   // curves are not in the stored fixture; a live run supplies them
+    },
     nodes:[
       P("q1","question","Research question","Which untested compounds should we assay for NDM-1 inhibition?","done",40,300,{
         objective:"Rank untested compounds by predicted ability to inhibit NDM-1, so wet-lab assays target the most promising few first.",
@@ -870,7 +1054,11 @@ const BASE={
     ],
     edges:[{from:"sq",to:"sev",rel:"uses"},{from:"sev",to:"shA",rel:"supports"},{from:"sev",to:"shB",rel:"contradicts"},{from:"shA",to:"sexp",rel:"tests"},{from:"shB",to:"sexp",rel:"tests"},{from:"sexp",to:"sres",rel:"produced"}]
 }};
-const PROJECT_ORDER=["ndm1","materials","solar"];
+/* Which projects the sidebar shows, in order. Fixed on a static host (the three
+   bundled demos); on a server it is whatever the signed-in account owns, so it
+   is rebuilt by the loader rather than declared once. */
+let PROJECT_ORDER=["ndm1","materials","solar"];
+const DEMO_PID="ndm1";   // the one project an anonymous visitor may view
 const PROJECT_ICON={
   flask:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>',
   layers:'<path d="M12 3 2 8l10 5 10-5-10-5zM2 14l10 5 10-5M2 11l10 5 10-5"/>',
@@ -893,31 +1081,188 @@ function curProj(){return state.projects[state.project];}
 function nodeById(id){return curProj().nodes.find(n=>n.id===id);}
 function curData(){return CHART_DATA[state.dataMode];}
 
-/* ============================= persistence ============================== */
+/* ============================= persistence ==============================
+   Three modes, decided once at boot by whether /api/projects answers and
+   whether it knows who we are:
+
+     static  no backend (GitHub Pages, or index.html opened directly).
+             The three bundled demos, persisted to localStorage. Unchanged
+             from how Relay has always behaved on a static host.
+     anon    backend reachable, not signed in. The demo project only, and
+             read-only -- nothing is written anywhere.
+     user    signed in. Projects live on the server, one JSON document each,
+             and are the only ones shown.
+
+   Pan/zoom and preview placement stay in localStorage in every mode: they are
+   per-device view preferences, not part of the research record. Node positions
+   do travel with the document, because where you put a node is part of the
+   graph. */
+const ACCOUNT={mode:"static",readOnly:false,user:null};
 const LSK="relay.state.v3";
-function loadPersist(){
-  // clone base
+function isReadOnly(){ return ACCOUNT.readOnly; }
+
+/* Guard for anything that changes a project. Anonymous visitors may pan, zoom
+   and inspect the demo, but not alter it -- and they are told why rather than
+   watching an edit silently fail to stick. */
+function requireAccount(what){
+  if(!isReadOnly()) return true;
+  toast(`Sign in to ${what}`);
+  return false;
+}
+
+/* Deep clone, used everywhere a template becomes a real project. */
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* --- mode: static ----------------------------------------------------- */
+function loadStatic(){
   state.projects={};
-  for(const id of PROJECT_ORDER) state.projects[id]=JSON.parse(JSON.stringify(BASE[id]));
-  let p=null;
-  try{ p=JSON.parse(localStorage.getItem(LSK)||"null"); }catch(e){ p=null; }
-  if(p){
-    if(p.dataMode) state.dataMode=p.dataMode;
-    if(p.theme) state.theme=p.theme;
-    if(p.project && state.projects[p.project]) state.project=p.project;
-    if(p.view) state.view=p.view;
-    if(p.previews) state.previews=p.previews;
-    if(p.pos){
-      for(const pid in p.pos){ if(!state.projects[pid])continue;
-        for(const n of state.projects[pid].nodes){ const o=p.pos[pid][n.id]; if(o){n.x=o.x;n.y=o.y;} }
-      }
+  PROJECT_ORDER=["ndm1","materials","solar"];
+  for(const id of PROJECT_ORDER) state.projects[id]=clone(BASE[id]);
+  applyLocalPrefs(readLocal(),true);
+}
+
+/* --- mode: anon ------------------------------------------------------- */
+function loadDemoOnly(){
+  state.projects={};
+  PROJECT_ORDER=[DEMO_PID];
+  const doc=clone(BASE[DEMO_PID]);
+  // `_local` marks a document that exists only in this tab. It is what the
+  // save path checks before issuing a PUT, so the demo canvas an anonymous
+  // visitor explores -- or the one left behind after deleting a last project
+  // -- is never written against a server id that does not exist.
+  doc._local=true;
+  state.projects[DEMO_PID]=doc;
+  state.project=DEMO_PID;
+  applyLocalPrefs(readLocal(),false);
+}
+
+/* --- mode: user ------------------------------------------------------- */
+/* The list endpoint returns summaries; the documents come in parallel. A
+   project whose document fails to load is skipped rather than rendered empty,
+   so a transient error cannot look like data loss. */
+async function loadServerProjects(summaries){
+  const docs=await Promise.all(summaries.map(async s=>{
+    try{ const r=await api("/api/projects/"+encodeURIComponent(s.id)); if(!r.ok) return null;
+         const j=await r.json(); return j&&j.doc?{sid:s.id,doc:j.doc}:null; }
+    catch(e){ return null; }
+  }));
+  state.projects={}; PROJECT_ORDER=[];
+  for(const d of docs){ if(!d) continue;
+    state.projects[d.sid]=d.doc; PROJECT_ORDER.push(d.sid);
+  }
+  if(PROJECT_ORDER.length && !state.projects[state.project]) state.project=PROJECT_ORDER[0];
+  applyLocalPrefs(readLocal(),false);
+}
+
+/* On the very first sign-in the account is empty. Give it one real project to
+   open rather than a blank canvas. `isNewAccount` is true exactly once per
+   account, so deleting everything later leaves the workspace empty by choice. */
+async function seedSampleProject(){
+  const doc=clone(BASE[DEMO_PID]);
+  doc.name="NDM-1 (sample)";
+  try{
+    const r=await api("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({doc})});
+    if(!r.ok) return null;
+    const j=await r.json();
+    return {id:j.id,name:j.name,icon:j.icon,run:j.run};
+  }catch(e){ return null; }
+}
+
+/* --- boot ------------------------------------------------------------- */
+async function loadPersist(){
+  let data=null;
+  try{
+    const r=await api("/api/projects");
+    if(r.ok) data=await r.json();
+  }catch(e){ data=null; }
+
+  if(!data){ ACCOUNT.mode="static"; ACCOUNT.readOnly=false; loadStatic(); return; }
+
+  if(!data.user){
+    ACCOUNT.mode="anon"; ACCOUNT.readOnly=true; ACCOUNT.user=null;
+    loadDemoOnly(); return;
+  }
+
+  ACCOUNT.mode="user"; ACCOUNT.readOnly=false; ACCOUNT.user=data.user;
+  let list=data.projects||[];
+  if(data.isNewAccount && !list.length){
+    const seeded=await seedSampleProject();
+    if(seeded) list=[seeded];
+  }
+  await loadServerProjects(list);
+  // An account with nothing in it still needs something on screen. The demo
+  // canvas stands in, marked local so it is not saved anywhere; New project
+  // stays available from the crumb menu.
+  if(!PROJECT_ORDER.length) loadDemoOnly();
+}
+
+/* --- device-local preferences ----------------------------------------- */
+function readLocal(){
+  try{ return JSON.parse(localStorage.getItem(LSK)||"null"); }catch(e){ return null; }
+}
+/* `withGraph` is true only in static mode, where localStorage is also the
+   store of record for node positions and user-added nodes. */
+function applyLocalPrefs(p,withGraph){
+  if(!p) return;
+  if(p.dataMode) state.dataMode=p.dataMode;
+  if(p.theme) state.theme=p.theme;
+  if(p.project && state.projects[p.project]) state.project=p.project;
+  if(p.view) state.view=p.view;
+  if(p.previews) state.previews=p.previews;
+  // Graph edits only come from localStorage on a static host. On a server the
+  // document is the store of record, and replaying a stale local diff over it
+  // would resurrect nodes the user deleted on another device.
+  if(!withGraph) return;
+  if(p.pos){
+    for(const pid in p.pos){ if(!state.projects[pid])continue;
+      for(const n of state.projects[pid].nodes){ const o=p.pos[pid][n.id]; if(o){n.x=o.x;n.y=o.y;} }
     }
-    if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
-    if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
+  }
+  if(p.extraNodes){ for(const pid in p.extraNodes){ if(state.projects[pid]) state.projects[pid].nodes.push(...p.extraNodes[pid]); } }
+  if(p.extraEdges){ for(const pid in p.extraEdges){ if(state.projects[pid]) state.projects[pid].edges.push(...p.extraEdges[pid]); } }
+}
+/* Every mutation in the app already calls savePersist(), so this is the single
+   place that decides where a change goes. Device preferences always go to
+   localStorage; the graph goes to the server when there is an account to put
+   it in, and nowhere at all when the visitor is anonymous. */
+let saveT=null, docSaveT=null, savingDoc=false, docDirty=false;
+function savePersist(){
+  saveLocalPrefs();
+  if(ACCOUNT.mode==="user" && !isReadOnly()) queueDocSave();
+}
+
+/* The document write is debounced harder than the local one: dragging a node
+   fires a save per frame, and each of those would otherwise be a PUT. */
+function queueDocSave(){
+  docDirty=true;
+  if(docSaveT) clearTimeout(docSaveT);
+  docSaveT=setTimeout(flushDocSave,800);
+}
+async function flushDocSave(){
+  if(savingDoc){ return; }          // a save is in flight; the dirty flag will retrigger
+  const sid=state.project;
+  const doc=state.projects[sid];
+  if(!sid||!doc||doc._local) return;
+  savingDoc=true; docDirty=false;
+  try{
+    const r=await api("/api/projects/"+encodeURIComponent(sid),{
+      method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({doc})});
+    if(!r.ok){
+      const j=await r.json().catch(()=>({}));
+      // A refused save is reported once; silently dropping it would let the
+      // user keep working on changes that are not being kept.
+      toast(j.error||"Could not save — your changes are not stored");
+    }
+  }catch(e){ toast("Offline — changes are not being saved"); }
+  finally{
+    savingDoc=false;
+    if(docDirty) queueDocSave();
   }
 }
-let saveT=null;
-function savePersist(){
+
+function saveLocalPrefs(){
   if(saveT) clearTimeout(saveT);
   saveT=setTimeout(()=>{
     try{
@@ -935,10 +1280,14 @@ function savePersist(){
           for(const e of state.projects[pid].edges){ if(!baseEdgeKeys.has(e.from+">"+e.to)) (extraEdges[pid]=extraEdges[pid]||[]).push(e); }
         }
       }
-      localStorage.setItem(LSK,JSON.stringify({
+      const payload={
         dataMode:state.dataMode,theme:state.theme,project:state.project,
-        view:state.view,previews:state.previews,pos,extraNodes,extraEdges
-      }));
+        view:state.view,previews:state.previews
+      };
+      // The graph diff is only meaningful on a static host. With a server, the
+      // document is authoritative and this would just be a stale second copy.
+      if(ACCOUNT.mode==="static") Object.assign(payload,{pos,extraNodes,extraEdges});
+      localStorage.setItem(LSK,JSON.stringify(payload));
     }catch(e){/* storage may be unavailable; ignore */}
   },260);
 }
@@ -1113,7 +1462,10 @@ function wireNode(d,n){
     if(onLink){ ev.stopPropagation(); if(onLink.dataset.act==="preview"){ togglePreview(n.id,true); } return; }
     canDrag = !!ev.target.closest(".node-head");
     start={x:ev.clientX,y:ev.clientY,nx:n.x,ny:n.y}; dragging=false; moved=false;
-    d.setPointerCapture(ev.pointerId);
+    // Capture only for a real drag. Capturing on a press in the title would
+    // retarget the pointer stream to the node and stop the browser extending
+    // a text selection, which is the one thing that text is now for.
+    if(canDrag) d.setPointerCapture(ev.pointerId);
     ev.stopPropagation();
   });
   d.addEventListener("pointermove",ev=>{
@@ -1129,7 +1481,7 @@ function wireNode(d,n){
   });
   d.addEventListener("pointerup",ev=>{
     if(!start) return;
-    try{d.releasePointerCapture(ev.pointerId);}catch(e){}
+    if(canDrag){ try{d.releasePointerCapture(ev.pointerId);}catch(e){} }
     if(dragging){ d.classList.remove("dragging"); savePersist(); }
     else if(!moved){ selectNode(n.id); }
     start=null;dragging=false;
@@ -1448,6 +1800,182 @@ function barChartSVG(c){
   g+=`</svg>`;
   return g;
 }
+/* ======================= report figure library =========================
+   Figures for the exported paper. Each takes a plain data object and returns
+   inline SVG, so they print as vector and survive a PDF at any zoom. They are
+   deliberately separate from the canvas charts above: a figure in a paper
+   needs a legend, axis titles, gridlines and readable ticks, where a preview
+   card on the canvas does not.
+
+   Every renderer draws only what it is given. None of them synthesise a
+   trend, extend a series, or fill a gap -- an absent series is simply not
+   drawn, and `figureSVG` says so rather than inventing a shape. */
+const SERIES_VARS=["--series-1","--series-3","--series-5","--series-6","--series-4","--series-2"];
+function seriesColor(s,i){ return s.color||SERIES_VARS[i%SERIES_VARS.length]; }
+
+function figLegend(series){
+  return `<div class="fig-legend">${series.map((s,i)=>
+    `<span class="lg-item"><span class="lg-sw" style="background:var(${seriesColor(s,i)})"></span>${esc(s.name)}</span>`).join("")}</div>`;
+}
+function niceTicks(max,n){
+  const step=max/n, out=[];
+  for(let i=0;i<=n;i++) out.push(Math.round(step*i*100)/100);
+  return out;
+}
+
+/* --- multi-series area + line, gradient filled -------------------------
+   For a quantity tracked across an ordered axis (screening depth, epochs,
+   days). Mirrors the stacked-trend look while keeping each series readable. */
+function areaChartSVG(c){
+  const W=560,H=280, ml=52,mr=18,mt=16,mb=54; const pw=W-ml-mr, ph=H-mt-mb;
+  const n=(c.x||[]).length; if(!n||!(c.series||[]).length) return "";
+  const ymax=c.ymax||Math.max(...c.series.flatMap(s=>s.values))*1.12||1;
+  const yticks=c.yticks||niceTicks(ymax,4);
+  const X=i=>ml+(n===1?pw/2:(i/(n-1))*pw), Y=v=>mt+ph-(Math.max(0,Math.min(ymax,v))/ymax)*ph;
+  const uid="ar"+Math.random().toString(36).slice(2,7);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title||"")}"><defs>`;
+  c.series.forEach((s,i)=>{ const col=seriesColor(s,i);
+    g+=`<linearGradient id="${uid}-${i}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(${col})" stop-opacity="0.42"/>
+        <stop offset="100%" stop-color="var(${col})" stop-opacity="0.02"/></linearGradient>`; });
+  g+=`</defs>`;
+  for(const t of yticks){ const y=Y(t); g+=`<line class="grid-line" x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}" stroke-dasharray="3 3"/><text class="tick-lab" x="${ml-8}" y="${y+3.5}" text-anchor="end">${t}</text>`; }
+  // x labels are thinned so they never collide, however long the series is
+  const every=Math.max(1,Math.ceil(n/9));
+  (c.x||[]).forEach((lab,i)=>{ if(i%every) return;
+    g+=`<text class="tick-lab" x="${X(i)}" y="${mt+ph+16}" text-anchor="middle">${esc(String(lab))}</text>`; });
+  g+=`<line class="axis-line" x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+ph}"/><line class="axis-line" x1="${ml}" y1="${mt+ph}" x2="${W-mr}" y2="${mt+ph}"/>`;
+  c.series.forEach((s,i)=>{
+    const col=seriesColor(s,i);
+    const line=s.values.map((v,j)=>`${j?"L":"M"}${X(j)},${Y(v)}`).join(" ");
+    g+=`<path d="${line} L${X(n-1)},${mt+ph} L${X(0)},${mt+ph} Z" fill="url(#${uid}-${i})" stroke="none"/>`;
+    g+=`<path d="${line}" fill="none" stroke="var(${col})" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if(n<=32) s.values.forEach((v,j)=>{ g+=`<circle cx="${X(j)}" cy="${Y(v)}" r="2.6" fill="var(${col})"><title>${esc(s.name)} · ${esc(String(c.x[j]))}: ${niceNum(v)}</title></circle>`; });
+  });
+  if(c.xlabel) g+=`<text class="axis-title" x="${ml+pw/2}" y="${H-20}" text-anchor="middle">${esc(c.xlabel)}</text>`;
+  if(c.ylabel) g+=`<text class="axis-title" transform="translate(14,${mt+ph/2}) rotate(-90)" text-anchor="middle">${esc(c.ylabel)}</text>`;
+  return g+`</svg>`+figLegend(c.series);
+}
+
+/* --- grouped vertical bars --------------------------------------------
+   Categories on x, one bar per series within each category. Used for
+   per-stratum breakdowns, where a single bar would hide the comparison. */
+function groupedBarSVG(c){
+  const cats=c.categories||[], series=c.series||[];
+  if(!cats.length||!series.length) return "";
+  const W=560,H=280, ml=54,mr=18,mt=16,mb=54; const pw=W-ml-mr, ph=H-mt-mb;
+  const ymax=c.ymax||Math.max(...series.flatMap(s=>s.values))*1.14||1;
+  const yticks=c.yticks||niceTicks(ymax,4);
+  const Y=v=>mt+ph-(Math.max(0,v)/ymax)*ph;
+  const gw=pw/cats.length, bw=Math.min(26,(gw*0.68)/series.length);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title||"")}">`;
+  for(const t of yticks){ const y=Y(t); g+=`<line class="grid-line" x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}" stroke-dasharray="3 3"/><text class="tick-lab" x="${ml-8}" y="${y+3.5}" text-anchor="end">${t}</text>`; }
+  g+=`<line class="axis-line" x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+ph}"/><line class="axis-line" x1="${ml}" y1="${mt+ph}" x2="${W-mr}" y2="${mt+ph}"/>`;
+  cats.forEach((cat,ci)=>{
+    const gx=ml+ci*gw, mid=gx+gw/2;
+    const total=series.length*bw+(series.length-1)*3;
+    series.forEach((s,si)=>{
+      const v=s.values[ci]; if(v==null) return;
+      const x=mid-total/2+si*(bw+3), y=Y(v), h=mt+ph-y;
+      g+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(1,h)}" rx="2.5" fill="var(${seriesColor(s,si)})"><title>${esc(s.name)} · ${esc(cat)}: ${niceNum(v)}</title></rect>`;
+    });
+    g+=`<text class="tick-lab" x="${mid}" y="${mt+ph+16}" text-anchor="middle">${esc(cat)}</text>`;
+  });
+  if(c.xlabel) g+=`<text class="axis-title" x="${ml+pw/2}" y="${H-20}" text-anchor="middle">${esc(c.xlabel)}</text>`;
+  if(c.ylabel) g+=`<text class="axis-title" transform="translate(14,${mt+ph/2}) rotate(-90)" text-anchor="middle">${esc(c.ylabel)}</text>`;
+  return g+`</svg>`+figLegend(series);
+}
+
+/* --- ROC curve ---------------------------------------------------------
+   The chance diagonal is drawn explicitly: an ROC without it invites the
+   reader to over-read a curve that may be barely above random. */
+function rocCurveSVG(c){
+  const pts=c.points||[]; if(pts.length<2) return "";
+  const W=360,H=330, ml=50,mr=16,mt=16,mb=52; const pw=W-ml-mr, ph=H-mt-mb;
+  const X=v=>ml+v*pw, Y=v=>mt+ph-v*ph;
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title||"ROC curve")}">`;
+  for(const t of [0,.25,.5,.75,1]){
+    g+=`<line class="grid-line" x1="${ml}" y1="${Y(t)}" x2="${W-mr}" y2="${Y(t)}" stroke-dasharray="3 3"/>`;
+    g+=`<text class="tick-lab" x="${ml-8}" y="${Y(t)+3.5}" text-anchor="end">${t}</text>`;
+    g+=`<text class="tick-lab" x="${X(t)}" y="${mt+ph+16}" text-anchor="middle">${t}</text>`;
+  }
+  g+=`<line class="axis-line" x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+ph}"/><line class="axis-line" x1="${ml}" y1="${mt+ph}" x2="${W-mr}" y2="${mt+ph}"/>`;
+  g+=`<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="var(--series-2)" stroke-width="1.6" stroke-dasharray="5 4"/>`;
+  g+=`<text class="tick-lab" x="${X(.62)}" y="${Y(.52)}" transform="rotate(-45 ${X(.62)} ${Y(.52)})" style="fill:var(--ink-3)">chance (AUC 0.50)</text>`;
+  const d=pts.map((p,i)=>`${i?"L":"M"}${X(p[0])},${Y(p[1])}`).join(" ");
+  g+=`<path d="${d} L${X(1)},${Y(0)} Z" fill="var(--series-1-band)" stroke="none"/>`;
+  g+=`<path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="2.6" stroke-linejoin="round"/>`;
+  if(c.auc!=null) g+=`<text class="fig-title-svg" x="${X(.56)}" y="${Y(.22)}">AUC = ${Number(c.auc).toFixed(3)}</text>`;
+  g+=`<text class="axis-title" x="${ml+pw/2}" y="${H-18}" text-anchor="middle">False positive rate</text>`;
+  g+=`<text class="axis-title" transform="translate(13,${mt+ph/2}) rotate(-90)" text-anchor="middle">True positive rate</text>`;
+  return g+`</svg>`;
+}
+
+/* --- paired distribution ----------------------------------------------
+   Two overlaid histograms. Separation between them is the visual form of
+   what AUC states numerically, so the two belong next to each other. */
+function distributionSVG(c){
+  const bins=c.bins||[]; if(!bins.length) return "";
+  const W=560,H=260, ml=52,mr=18,mt=16,mb=54; const pw=W-ml-mr, ph=H-mt-mb;
+  const groups=c.groups||[];
+  const ymax=c.ymax||Math.max(...groups.flatMap(gr=>gr.counts))*1.12||1;
+  const Y=v=>mt+ph-(Math.max(0,v)/ymax)*ph, bw=pw/bins.length;
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title||"")}">`;
+  for(const t of niceTicks(ymax,4)){ const y=Y(t); g+=`<line class="grid-line" x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}" stroke-dasharray="3 3"/><text class="tick-lab" x="${ml-8}" y="${y+3.5}" text-anchor="end">${t}</text>`; }
+  g+=`<line class="axis-line" x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt+ph}"/><line class="axis-line" x1="${ml}" y1="${mt+ph}" x2="${W-mr}" y2="${mt+ph}"/>`;
+  groups.forEach((gr,gi)=>{
+    const col=seriesColor(gr,gi);
+    gr.counts.forEach((v,i)=>{ if(v==null) return;
+      const x=ml+i*bw, y=Y(v);
+      g+=`<rect x="${x+1}" y="${y}" width="${bw-2}" height="${Math.max(0,mt+ph-y)}" fill="var(${col})" opacity="${gi?0.55:0.78}"><title>${esc(gr.name)} · bin ${esc(String(bins[i]))}: ${v}</title></rect>`;
+    });
+  });
+  const every=Math.max(1,Math.ceil(bins.length/8));
+  bins.forEach((b,i)=>{ if(i%every) return; g+=`<text class="tick-lab" x="${ml+i*bw+bw/2}" y="${mt+ph+16}" text-anchor="middle">${esc(String(b))}</text>`; });
+  if(c.xlabel) g+=`<text class="axis-title" x="${ml+pw/2}" y="${H-18}" text-anchor="middle">${esc(c.xlabel)}</text>`;
+  if(c.ylabel) g+=`<text class="axis-title" transform="translate(14,${mt+ph/2}) rotate(-90)" text-anchor="middle">${esc(c.ylabel)}</text>`;
+  return g+`</svg>`+figLegend(groups);
+}
+
+/* --- horizontal metric comparison with explicit null band --------------
+   For method-vs-control comparisons. The shaded band marks "no better than
+   chance", so a control sitting inside it reads as a pass at a glance. */
+function controlBarSVG(c){
+  const rows=c.rows||[]; if(!rows.length) return "";
+  const rowH=34, top=14, ml=150, mr=56, bottom=42;
+  const W=560, pw=W-ml-mr, H=top+rows.length*rowH+bottom;
+  const xmax=c.xmax||Math.max(...rows.map(r=>r.value))*1.15||1;
+  const X=v=>ml+(Math.max(0,v)/xmax)*pw;
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(c.title||"")}">`;
+  if(c.nullBand){ g+=`<rect x="${X(c.nullBand[0])}" y="${top-4}" width="${Math.max(1,X(c.nullBand[1])-X(c.nullBand[0]))}" height="${rows.length*rowH+8}" fill="var(--series-2)" opacity="0.14"/>`;
+    g+=`<text class="tick-lab" x="${X(c.nullBand[1])+4}" y="${top-2}" style="fill:var(--ink-3)">no-effect band</text>`; }
+  for(const t of (c.xticks||niceTicks(xmax,4))){ g+=`<line class="grid-line" x1="${X(t)}" y1="${top}" x2="${X(t)}" y2="${top+rows.length*rowH}" stroke-dasharray="3 3"/><text class="tick-lab" x="${X(t)}" y="${H-bottom+22}" text-anchor="middle">${t}</text>`; }
+  rows.forEach((r,i)=>{
+    const cy=top+i*rowH+rowH/2;
+    const col=r.tone==="control"?"--series-2":(r.tone==="alert"?"--series-4":"--series-1");
+    g+=`<text class="tick-lab" x="${ml-10}" y="${cy+3.5}" text-anchor="end" style="font-weight:600;fill:var(--ink-2)">${esc(r.label)}</text>`;
+    g+=`<rect x="${ml}" y="${cy-9}" width="${Math.max(2,X(r.value)-ml)}" height="18" rx="3" fill="var(${col})"><title>${esc(r.label)}: ${niceNum(r.value)}</title></rect>`;
+    g+=`<text class="tick-lab" x="${X(r.value)+8}" y="${cy+3.5}" style="fill:var(--ink-2);font-weight:700">${niceNum(r.value)}${esc(c.unit||"")}</text>`;
+  });
+  if(c.xlabel) g+=`<text class="axis-title" x="${ml+pw/2}" y="${H-10}" text-anchor="middle">${esc(c.xlabel)}</text>`;
+  return g+`</svg>`;
+}
+
+/* Dispatcher. An unknown or empty figure returns a stated absence rather
+   than a blank box, so a reader never mistakes a missing run for a null
+   result. */
+function figureSVG(f){
+  if(!f||!f.kind) return "";
+  const out = f.kind==="area"? areaChartSVG(f)
+    : f.kind==="groupedBar"? groupedBarSVG(f)
+    : f.kind==="roc"? rocCurveSVG(f)
+    : f.kind==="dist"? distributionSVG(f)
+    : f.kind==="controls"? controlBarSVG(f)
+    : f.kind==="enrichment"? lineChartSVG(f)
+    : f.kind==="candidates"? barChartSVG(f) : "";
+  return out || `<div class="fig-empty">No data recorded for this figure yet. Run the experiment to populate it.</div>`;
+}
+
 function candidateTable(d){
   const c=d.candidates;
   return `<div class="section"><h3>Candidate ranking</h3><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Rank</th><th>Candidate</th><th class="num">Predicted score</th><th class="num">± unc.</th>${c.family?"<th>Chemotype family</th>":""}</tr></thead><tbody>
@@ -1581,6 +2109,7 @@ $("#cmdInput").addEventListener("keydown",e=>{ if(e.key==="Enter")sendCmd(); });
 
 /* ============================== add node ============================== */
 function addNode(type,text){
+  if(!requireAccount("add to a project")) return null;
   const p=curProj(); const r=canvasRect(); const c=screenToWorld(r.width/2, r.height/2);
   const id=type[0]+"-"+Math.random().toString(36).slice(2,6);
   const titleMap={question:"New question",source:"New evidence",hypothesis:"New hypothesis",experiment:"New experiment",result:"New result",note:"Note"};
@@ -1608,8 +2137,104 @@ function openMenu(anchor,html,onwire){
 }
 $("#crumb").addEventListener("click",()=>{
   const items=PROJECT_ORDER.map(id=>{const p=state.projects[id];return `<button class="mi" data-pid="${id}" aria-current="${id===state.project}"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${PROJECT_ICON[p.icon]}</svg><span>${esc(p.name)}</span><span class="mi-sub" style="margin-left:auto">${esc(p.run)}</span></button>`;}).join("");
-  openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}`,m=>{ $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);})); });
+  // Anonymous visitors see the demo and an invitation to sign in; there is no
+  // New or Delete to offer them, so the menu does not pretend otherwise.
+  const canEdit=ACCOUNT.mode==="user"&&!isReadOnly();
+  const actions=canEdit?`
+    <div class="m-sep"></div>
+    <button class="mi" data-act="new"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>New project</span></button>
+    <button class="mi" data-act="del"><svg class="mi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span>Delete “${esc(curProj()?curProj().name:"")}”</span></button>`
+    :(ACCOUNT.mode==="anon"?`
+    <div class="m-sep"></div>
+    <div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Viewing the public demo. <b>Sign in</b> to keep your own projects.</div>`:"");
+  openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}${actions}`,m=>{
+    $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);}));
+    const nb=$("[data-act='new']",m); if(nb) nb.addEventListener("click",()=>{closeMenus();createProject();});
+    const db=$("[data-act='del']",m); if(db) db.addEventListener("click",()=>{closeMenus();deleteCurrentProject();});
+  });
 });
+
+/* ------------------------- create / delete ---------------------------- */
+/* A new project starts from the demo graph rather than an empty canvas: the
+   node types, the experiment wiring and the result node all have to exist for
+   Run to have anything to drive, and an empty graph cannot express that. */
+/* An empty-but-wired graph. Used when scaffolding is unavailable, and as the
+   shape the scaffolder fills. It carries no content from any other project:
+   a new project about batteries must never inherit NDM-1's question, which is
+   what cloning the demo used to do. */
+function blankGraph(name,question){
+  const L={q1:[40,300],ev1:[300,300],hA:[560,170],hB:[560,430],exp:[830,300],res:[1100,250],next:[1380,140]};
+  const N=(id,type,title,summary,meta)=>({id,type,title,summary,status:"planned",x:L[id][0],y:L[id][1],meta:meta||{}});
+  return {
+    name,icon:"flask",run:"Experiment 01",question:question||"",
+    primaryExp:"exp",resultNode:"res",scaffolded:false,
+    nodes:[
+      N("q1","question","Research question",question||"Describe the question this project answers",
+        question?{objective:question}:{}),
+      N("ev1","source","Evidence","No sources recorded yet",
+        {sources:[],relevance:"Add sources here. Citations are never generated — an invented reference is worse than a missing one."}),
+      N("hA","hypothesis","Hypothesis A","Describe a candidate explanation",{}),
+      N("hB","hypothesis","Hypothesis B","Describe a competing explanation",{}),
+      N("exp","experiment","Experiment 01","Describe the test that separates them",{approval:"Required before run."}),
+      N("res","result","Results","Not yet run",{}),
+      N("next","next","Next experiment","Choose a test",{})
+    ],
+    edges:[{from:"q1",to:"ev1",rel:"uses"},{from:"ev1",to:"hA",rel:"supports"},
+      {from:"ev1",to:"hB",rel:"supports"},{from:"hA",to:"exp",rel:"tests"},
+      {from:"hB",to:"exp",rel:"tests"},{from:"exp",to:"res",rel:"produced"},
+      {from:"res",to:"next",rel:"uses"}]
+  };
+}
+
+async function createProject(){
+  const name=(prompt("Name the new project","Untitled project")||"").trim();
+  if(!name) return;
+  const question=(prompt("What question should this project answer?\n\nLeave blank to start from an empty graph.","")||"").trim();
+
+  // Ask the backend to design the opening plan for *this* topic. Everything
+  // it proposes lands on editable nodes, so the user reads and corrects it
+  // before any of it can reach an exported paper.
+  let doc=null;
+  if(question){
+    toast("Designing the research plan…");
+    try{
+      const r=await api("/api/scaffold",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name,question})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.ok&&j.doc) doc=j.doc;
+      else toast(j.reason||"Scaffolding unavailable — starting from an empty graph");
+    }catch(e){ toast("Offline — starting from an empty graph"); }
+  }
+  if(!doc) doc=blankGraph(name,question);
+
+  try{
+    const r=await api("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({doc})});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); toast(j.error||"Could not create project"); return; }
+    const j=await r.json();
+    state.projects[j.id]=doc; PROJECT_ORDER.push(j.id);
+    renderProjects(); switchProject(j.id);
+    toast(`Created “${name}”`);
+  }catch(e){ toast("Offline — could not create project"); }
+}
+
+async function deleteCurrentProject(){
+  const sid=state.project, p=state.projects[sid];
+  if(!p) return;
+  if(!confirm(`Delete “${p.name}”? This cannot be undone.`)) return;
+  try{
+    const r=await api("/api/projects/"+encodeURIComponent(sid),{method:"DELETE"});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); toast(j.error||"Could not delete project"); return; }
+  }catch(e){ toast("Offline — could not delete project"); return; }
+  delete state.projects[sid];
+  delete state.view[sid]; delete state.previews[sid];
+  PROJECT_ORDER=PROJECT_ORDER.filter(x=>x!==sid);
+  toast(`Deleted “${p.name}”`);
+  if(PROJECT_ORDER.length){ switchProject(PROJECT_ORDER[0]); }
+  else{ // last project gone: fall back to a local, unsaved demo canvas
+    loadDemoOnly(); renderProjects(); renderCrumb(); renderGraph(); fit(false);
+  }
+}
 $("#provenance").addEventListener("click",()=>{
   openMenu($("#provenance"),`
     <div class="m-head">Data source (sample)</div>
@@ -1727,14 +2352,23 @@ function renderAuth(){
     av.style.backgroundImage=""; av.textContent="–"; nm.textContent="Static preview";
     row.title="No server on this host — runs replay a recorded trace";
   }else{
-    av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Sign in with GitHub";
-    row.title=AUTH.configured?"Sign in with GitHub":"Sign-in is not configured on this server";
+    av.style.backgroundImage=""; av.textContent="?"; nm.textContent="Sign in to save projects";
+    row.title=AUTH.configured
+      ? "Viewing the public demo read-only. Sign in with GitHub to create and keep your own projects."
+      : "Sign-in is not configured on this server";
   }
 }
 function authClick(){
   if(!AUTH.reachable){ toast("No server on this host — runs replay a recorded trace"); return; }
   if(AUTH.user){
-    api("/auth/logout",{method:"POST"}).then(()=>{AUTH.user=null;AUTH.mayRun=false;renderAuth();toast("Signed out");});
+    // Signing out has to drop the projects too, not just the chip -- leaving
+    // another account's graphs on screen would be both wrong and confusing.
+    api("/auth/logout",{method:"POST"}).then(async()=>{
+      AUTH.user=null; AUTH.mayRun=false; renderAuth();
+      await loadPersist();
+      renderProjects(); renderCrumb(); renderGraph(); fit(false);
+      toast("Signed out — viewing the public demo");
+    });
   }else if(AUTH.configured){
     window.location.href=(CFG.backendUrl||"")+"/auth/login?next="+encodeURIComponent(location.pathname);
   }else{
@@ -1844,7 +2478,16 @@ async function runViaBackend(expId,runId){
 function applyBackendEvent(ev,expId,runId){
   if(ev.type==="status"&&ev.node) setStatus(ev.node,ev.status);
   else if(ev.type==="act") logEvent({agent:ev.agent||"agent",msg:ev.msg||"",st:ev.st||"done"});
-  else if(ev.type==="result"){ if(ev.node){ setStatus(ev.node,"done"); togglePreview(ev.node,true); } }
+  else if(ev.type==="result"){
+    // Record the run against the project. This is what makes the exported
+    // report describe *this* project's run rather than a stored example:
+    // every figure and every number in the paper is read back from here.
+    if(ev.data){
+      const p=curProj();
+      if(p){ p.results=Object.assign({},ev.data,{recordedAt:new Date().toISOString(),runId:runId}); savePersist(); }
+    }
+    if(ev.node){ setStatus(ev.node,"done"); togglePreview(ev.node,true); }
+  }
   // A server-side failure is reported as itself, not hidden behind a replay.
   else if(ev.type==="error"){
     logEvent({agent:"Relay",msg:ev.msg||"Run failed on the server",st:"failed"});
@@ -1888,18 +2531,448 @@ $("#navScrim").addEventListener("click",()=>el.app.classList.remove("nav-open"))
 let rT=null; addEventListener("resize",()=>{ if(rT)cancelAnimationFrame(rT); rT=requestAnimationFrame(()=>{ renderMinimap(); }); });
 
 /* ============================== init ================================ */
-function init(){
-  loadPersist();
+async function init(){
+  // Projects now come from the server, so the first paint waits on them. The
+  // theme is applied first so the wait is not a flash of the wrong colours.
+  applyTheme();
+  await loadPersist();
   applyTheme();
   updateProvenance();
   renderProjects(); renderCrumb(); renderGraph(); renderCmdCtx();
   if(state.view[state.project]) applyTransform(false); else fit(false);
   // open the result preview by default on first load (matches the primary mock)
-  if(!localStorageSeen()){ const id=curProj().resultNode; if(id){ previewState(id).open=true; renderPreviews(); } }
+  if(!localStorageSeen()){ const id=curProj()&&curProj().resultNode; if(id){ previewState(id).open=true; renderPreviews(); } }
   setTimeout(()=>{ el.canvasHint.textContent="Drag a node to move it · click a node to inspect · scroll to pan, ⌘/Ctrl+scroll to zoom"; el.canvasHint.classList.add("show"); setTimeout(()=>el.canvasHint.classList.remove("show"),5200); },700);
   scheduleMinimap();
 }
 function localStorageSeen(){ try{return !!localStorage.getItem(LSK);}catch(e){return false;} }
+
+/* ============================== report ================================
+   Assembles the project into a paper. Everything here is derived from the
+   graph, the chart data and the run log -- the report cannot state a result
+   the workspace does not hold. The three narrative sections may be replaced
+   by model-written prose (see writeNarrative), which is constrained to the
+   same facts and is labelled in the byline when used. */
+const NARRATIVE={abstract:"",discussion:"",limitations:"",source:"assembled",model:"",
+  verified:false, verifyError:null, removed:[]};
+
+/* --- figures, derived from what the project actually recorded ----------
+   The figure set is built per project, from `project.results` (written by a
+   run) and, for the bundled demos, from their stored chart data. Nothing is
+   modelled to fill a gap: a metric the project has not measured produces a
+   figure that says so. In particular an ROC curve is drawn only from real
+   (fpr, tpr) pairs -- a curve reconstructed from a single AUC value would be
+   a drawing of an assumption, not of a result. */
+function projResults(){ const p=curProj(); return (p&&p.results)||null; }
+
+function buildFigures(){
+  const d=curData(), r=projResults(), f=(r&&r.figures)||{};
+  const out=[];
+
+  // Figure: enrichment against screening depth
+  if((f.enrichment_curve||[]).length){
+    const depths=f.enrichment_curve.map(p=>p[0]);
+    const series=[{name:"Model ranking",values:f.enrichment_curve.map(p=>p[1])}];
+    if((f.random_curve||[]).length) series.push({name:"Random ranking (control)",values:f.random_curve.map(p=>p[1]),color:"--series-2"});
+    out.push({id:"enrich",kind:"area",x:depths,series,
+      xlabel:"Fraction of library screened (%)", ylabel:"Enrichment factor (×)",
+      caption:"Enrichment factor as a function of how deep into the ranked library the assay budget reaches, against a random-ranking control measured on the same held-out set.",
+      title:"Enrichment versus screening depth"});
+  }else if(d.enrichment){
+    out.push(Object.assign({id:"enrich",kind:"enrichment",
+      caption:"Enrichment factor against screening depth. "+(d.measured?"Values are the recorded fixture run.":"Illustrative placeholder values — not a measured result."),
+      },d.enrichment));
+  }
+
+  // Figure: ROC on the held-out split
+  out.push({id:"roc",kind:"roc",points:f.roc_curve||[],auc:r?r.roc_auc:null,
+    title:"ROC — held-out scaffold-disjoint split",
+    caption:"Receiver operating characteristic on the held-out split, with the chance diagonal shown for reference. Drawn only from measured (FPR, TPR) pairs."});
+
+  // Figure: score separation between classes
+  if((f.score_bins||[]).length){
+    out.push({id:"dist",kind:"dist",bins:f.score_bins,
+      groups:[{name:"Known actives",counts:f.score_hist_active||[]},
+              {name:"Known inactives",counts:f.score_hist_inactive||[],color:"--series-2"}],
+      xlabel:"Predicted score", ylabel:"Compounds",
+      title:"Predicted-score distribution by true class",
+      caption:"Distribution of predicted scores for known actives and inactives in the held-out set. The separation between the two is what the AUC above summarises as a single number."});
+  }
+
+  // Figure: method against its controls
+  if(r){
+    const rows=[];
+    if(r.ef_top1pct!=null) rows.push({label:"Model · top 1%",value:r.ef_top1pct});
+    if(r.ef_top5pct!=null) rows.push({label:"Model · top 5%",value:r.ef_top5pct});
+    if(r.control_random_ef1!=null) rows.push({label:"Random ranking",value:r.control_random_ef1,tone:"control"});
+    if(rows.length>1){
+      out.push({id:"controls",kind:"controls",rows,unit:"×",nullBand:[0,1.2],
+        xlabel:"Enrichment factor (× over base rate)",
+        title:"Method against its negative control",
+        caption:"Enrichment achieved by the ranking against a random-ranking control. The shaded band marks the region indistinguishable from chance; a control falling inside it is the expected, passing outcome."});
+    }
+  }
+
+  // Figure: ranked candidates
+  if(d.candidates&&(d.candidates.rows||[]).length){
+    out.push(Object.assign({id:"cands",kind:"candidates",
+      caption:"Top-ranked candidates with their predicted scores and uncertainty. "+(d.measured?"":"Illustrative placeholder values — not measured."),
+      },d.candidates));
+  }
+  return out;
+}
+
+function byType(t){ return (curProj().nodes||[]).filter(n=>n.type===t); }
+function firstOf(t){ return byType(t)[0]||null; }
+function m(n){ return (n&&n.meta)||{}; }
+/* Rationales are written as standalone sentences; splicing one into the middle
+   of another sentence needs its leading capital dropped -- but not on an
+   acronym or a flag like "RDKit" or "--aid", where the capital is the word. */
+function lowerFirst(s){
+  if(!s) return s;
+  if(/^[A-Z]{2,}/.test(s)||/^[^A-Za-z]/.test(s)) return s;
+  return s[0].toLowerCase()+s.slice(1);
+}
+function list(items){
+  if(!items||!items.length) return "";
+  return `<ul>${items.map(i=>`<li>${esc(typeof i==="string"?i:(i.name||""))}</li>`).join("")}</ul>`;
+}
+
+/* --- assembled prose -------------------------------------------------- */
+/* Deterministic fallbacks. They are written to be honest rather than
+   impressive: every clause is conditional on the data actually being there. */
+function assembledAbstract(){
+  const q=m(firstOf("question")), ex=m(firstOf("experiment")), d=curData();
+  const res=byType("result").map(m).find(x=>x.interp);
+  const ev=m(firstOf("source"));
+  const bits=[];
+  if(q.objective) bits.push(q.objective);
+  if(ev&&ev.relevance) bits.push(`Evidence base: ${ev.relevance.replace(/\.$/,"")}.`);
+  if(ex.method) bits.push(`Method: ${ex.method.replace(/\.$/,"")}, with ${ex.controls||"no declared controls"}.`);
+  if(res&&res.interp) bits.push(res.interp);
+  if(!d.measured) bits.push("All values shown are illustrative placeholders, not measured findings.");
+  return bits.join(" ");
+}
+function assembledDiscussion(){
+  const res=byType("result").map(m).find(x=>x.interp);
+  const ex=m(firstOf("experiment"));
+  const hyps=byType("hypothesis");
+  const out=[];
+  if(res&&res.interp) out.push(res.interp);
+  if(ex.controls) out.push(`The result is interpretable only because the controls behaved as required: ${ex.controls}. A ranking that beat random while the controls also looked strong would indicate a leak in the split rather than a real signal.`);
+  if(hyps.length>1) out.push(`Two hypotheses were carried in parallel (${hyps.map(h=>esc(h.title)).join(" and ")}), so the experiment was built to separate them rather than to confirm a single favoured explanation.`);
+  return out.join("\n\n");
+}
+function assembledLimitations(){
+  const q=m(firstOf("question")), ev=m(firstOf("source")), d=curData();
+  const out=[];
+  if(!d.measured) out.push("The figures in this report are illustrative placeholders and must not be read as measured findings.");
+  if(q.scope) out.push(q.scope);
+  if(ev.limitations) out.push(ev.limitations);
+  if(q.constraints) out.push(q.constraints);
+  out.push("This work ranks candidates from assay-derived labels. It does not establish binding, and it cannot distinguish a genuine inhibitor from a compound that registers as active across many unrelated assays. Any candidate taken forward needs orthogonal confirmation.");
+  return out.join(" ");
+}
+
+/* --- sections --------------------------------------------------------- */
+function secQuestion(){
+  const n=firstOf("question"); if(!n) return "";
+  const q=m(n);
+  const rows=[["Objective",q.objective],["Scope",q.scope],["Success measure",q.outcome],
+              ["Constraints",q.constraints],["Data",q.data],["Budget",q.budget]]
+    .filter(r=>r[1]).map(r=>`<tr><th style="width:150px">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("");
+  return `<section><h2>1 · Question and objective</h2>
+    <p>${esc(n.summary||n.title)}</p>${rows?`<table>${rows}</table>`:""}</section>`;
+}
+function secEvidence(){
+  const n=firstOf("source"); if(!n) return "";
+  const e=m(n);
+  // Numbering matches the reference list exactly: both walk the same records
+  // in the same order, so [3] in the table is [3] in the bibliography.
+  const refs=refList();
+  const rows=refs.map((s,i)=>`<tr><td class="num">[${i+1}]</td><td>${esc(s.src)}</td><td class="muted">${esc(s.meta)}</td>
+      <td>${esc(s.rel||"—")}</td><td>${esc(s.body)}</td></tr>`).join("");
+  return `<section><h2>2 · Evidence base</h2>
+    ${e.relevance?`<p>${esc(e.relevance)}</p>`:""}
+    ${rows?table("Sources on record, with the bearing each has on the question. Numbers match the reference list in §11.",
+        `<thead><tr><th>#</th><th>Source</th><th>Type</th><th>Relation</th><th>Bearing on the question</th></tr></thead>`,rows):""}
+    ${e.limitations?`<div class="callout warn"><b>Evidence limitation.</b> ${esc(e.limitations)}</div>`:""}</section>`;
+}
+function secHypotheses(){
+  const hs=byType("hypothesis"); if(!hs.length) return "";
+  const blocks=hs.map((n,i)=>{
+    const h=m(n);
+    return `<h3>${esc(n.title)} — ${esc(n.summary||"")}</h3>
+      ${h.statement?`<p>${esc(h.statement)}</p>`:""}
+      ${h.predictions&&h.predictions.length?`<p class="muted"><b>Predictions if true.</b></p>${list(h.predictions)}`:""}
+      ${h.supports&&h.supports.length?`<p class="muted"><b>Supporting evidence.</b></p>${list(h.supports)}`:""}
+      ${h.contradict&&h.contradict.length?`<p class="muted"><b>Evidence against / risk.</b></p>${list(h.contradict)}`:""}
+      ${h.uncertainty?`<p class="muted"><b>Confidence.</b> ${esc(h.uncertainty)}</p>`:""}`;
+  }).join("");
+  return `<section><h2>3 · Hypotheses considered</h2>
+    <p>${hs.length} competing hypotheses were carried forward, so the experiment below is designed to discriminate between them rather than to confirm one.</p>
+    ${blocks}</section>`;
+}
+function secMethods(){
+  const n=firstOf("experiment"); if(!n) return "";
+  const x=m(n);
+  const tests=(x.tests||[]).map(t=>`<tr><td>${esc(t.name)} ${t.sel?`<span class="tag sel">selected</span>`:`<span class="tag">considered</span>`}</td><td>${esc(t.why||"")}</td></tr>`).join("");
+  const rows=[["Method",x.method],["Inputs",x.inputs],["Baseline",x.baseline],["Controls",x.controls],
+              ["Parameters",x.params],["Approval",x.approval],["Budget",x.cost]]
+    .filter(r=>r[1]).map(r=>`<tr><th style="width:150px">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("");
+  return `<section><h2>4 · Method</h2>
+    <p><b>${esc(n.title)}</b> — ${esc(n.summary||"")}</p>
+    ${tests?`<h3>Candidate tests weighed</h3><table><thead><tr><th>Test</th><th>Rationale</th></tr></thead><tbody>${tests}</tbody></table>`:""}
+    ${rows?`<h3>Protocol</h3><table>${rows}</table>`:""}</section>`;
+}
+/* Figure and table numbering is assigned as the paper is assembled, so the
+   captions stay correct however many figures a given project has data for. */
+let FIGN=0, TABN=0;
+function figure(f){
+  const svg=figureSVG(f); if(!svg) return "";
+  FIGN++;
+  return `<figure class="fig"><div class="chart">
+      <div class="fig-title">${esc(f.title||"")}</div>
+      ${f.sub?`<div class="fig-sub">${esc(f.sub)}</div>`:""}
+      ${svg}</div>
+    <figcaption><b>Figure ${FIGN}.</b> ${esc(f.caption||f.title||"")}</figcaption></figure>`;
+}
+function table(caption,head,bodyRows){
+  if(!bodyRows) return "";
+  TABN++;
+  return `<div class="tbl-wrap"><div class="tbl-cap"><b>Table ${TABN}.</b> ${esc(caption)}</div>
+    <table>${head}<tbody>${bodyRows}</tbody></table></div>`;
+}
+
+function secResults(){
+  const d=curData(), r=projResults();
+  const figs=buildFigures();
+
+  // Measured scalars, read back from the project's own recorded run.
+  // Precision is set per measure, not globally. An AUC rounded to two places
+  // turns a scramble control of 0.503 into "0.5", which reads as a round
+  // number rather than as the measurement it is; enrichment factors, by
+  // contrast, carry no meaning past two places.
+  const mrows=[
+    ["Ranking accuracy (ROC-AUC)", r&&r.roc_auc, 3, "held-out, scaffold-disjoint split"],
+    ["Enrichment @ top 1%", r&&r.ef_top1pct, 2, "× over the base hit rate"],
+    ["Enrichment @ top 5%", r&&r.ef_top5pct, 2, "× over the base hit rate"],
+    ["Control — random ranking", r&&r.control_random_ef1, 2, "must sit at ≈1× for the result to mean anything"],
+    ["Control — label scramble (AUC)", r&&r.control_yscramble_auc, 3, "must collapse to ≈0.5"],
+  ].filter(x=>x[1]!=null)
+   .map(x=>`<tr><td>${esc(x[0])}</td><td class="num"><b>${Number(x[1]).toFixed(x[2])}</b></td><td class="muted">${esc(x[3])}</td></tr>`).join("");
+
+  const srows=[
+    ["Compounds in library", r&&r.n_compounds],["Known actives", r&&r.n_active],
+    ["Base hit rate", r&&r.base_rate!=null?(Math.round(r.base_rate*1e4)/100)+"%":null],
+    ["Training compounds", r&&r.n_train],["Held-out compounds", r&&r.n_test],
+  ].filter(x=>x[1]!=null)
+   .map(x=>`<tr><td>${esc(x[0])}</td><td class="num">${esc(String(x[1]))}</td></tr>`).join("");
+
+  const interp=byType("result").map(m).filter(x=>x.interp);
+  const stats=(d.stats||[]).map(s=>`<tr><td>${esc(s.lab)}</td><td class="num"><b>${esc(s.val)}</b></td><td class="muted">${esc(s.sub||"")}</td></tr>`).join("");
+
+  return `<section><h2>5 · Results</h2>
+    ${!r?`<div class="callout warn"><b>No run recorded for this project.</b> The figures below render only what has been measured; sections without data state their absence rather than showing a placeholder curve.</div>`:""}
+    ${!d.measured&&!r?`<div class="callout warn"><b>Illustrative data.</b> Values shown come from the interface's sample mode and are not measured findings.</div>`:""}
+    ${srows?table("Composition of the screened set and the train/test split.",
+        `<thead><tr><th>Quantity</th><th class="num">Value</th></tr></thead>`,srows):""}
+    ${mrows?table("Measured performance on the held-out split, with both negative controls.",
+        `<thead><tr><th>Measure</th><th class="num">Value</th><th>Basis</th></tr></thead>`,mrows)
+      :(stats?table("Headline measures.",`<thead><tr><th>Measure</th><th class="num">Value</th><th>Basis</th></tr></thead>`,stats):"")}
+    ${figs.map(figure).join("")}
+    ${interp.length?`<h3>5.1 · Interpretation</h3>${interp.map(x=>`<p>${esc(x.interp)}</p>`).join("")}`:""}</section>`;
+}
+
+/* --- references --------------------------------------------------------
+   Built only from sources recorded on the project's evidence nodes. The
+   renderer never supplies a DOI, a year, a venue or an author it was not
+   given: an entry with only a title is printed with only a title. A paper
+   that invents a citation is worse than one that cites sparsely. */
+function refList(){
+  const out=[];
+  for(const n of byType("source")){
+    for(const s of (m(n).sources||[])){
+      if(!s||!s.src) continue;
+      out.push({src:s.src, meta:s.meta||"", body:s.body||"", url:s.url||"", doi:s.doi||"", rel:s.rel||""});
+    }
+  }
+  return out;
+}
+function secReferences(){
+  const refs=refList();
+  if(!refs.length) return `<section><h2>11 · References</h2>
+    <p class="muted">No sources are recorded on this project's evidence nodes. Add evidence in the workspace and they will be cited here.</p></section>`;
+  const items=refs.map((x,i)=>`<li id="ref${i+1}">
+      <span class="ref-src">${esc(x.src)}</span>${x.meta?` <span class="muted">(${esc(x.meta)})</span>`:""}
+      ${x.doi?` <span class="muted">doi:${esc(x.doi)}</span>`:""}
+      ${x.url?` <span class="muted">${esc(x.url)}</span>`:""}
+    </li>`).join("");
+  return `<section><h2>11 · References</h2>
+    <ol class="reflist">${items}</ol>
+    <p class="muted" style="margin-top:10px">Entries are reproduced verbatim from the sources recorded in the workspace. Fields absent from the record — author, year, venue, identifier — are omitted rather than reconstructed.</p></section>`;
+}
+function secControls(){
+  const x=m(firstOf("experiment")); if(!x.controls&&!x.baseline) return "";
+  return `<section><h2>6 · Controls and validity</h2>
+    <table>
+      ${x.baseline?`<tr><th style="width:150px">Baseline</th><td>${esc(x.baseline)}</td></tr>`:""}
+      ${x.controls?`<tr><th style="width:150px">Controls</th><td>${esc(x.controls)}</td></tr>`:""}
+    </table>
+    <p class="muted">Controls are reported whether or not they are favourable. A control that failed to behave as specified would invalidate the result above, and is the first thing a reader should check.</p></section>`;
+}
+function secNext(){
+  const n=firstOf("next"); if(!n) return "";
+  const x=m(n), tests=x.tests||[];
+  const rows=tests.map((t,i)=>`<tr><td><b>${i+1}.</b> ${esc(t.name)}</td><td>${esc(t.why||"")}</td><td class="num">${esc(t.cost||"—")}</td></tr>`).join("");
+  return `<section><h2>9 · Recommended next experiments</h2>
+    ${x.changed?`<p><b>What this run changed.</b> ${esc(x.changed)}</p>`:""}
+    ${x.uncertainty?`<div class="callout"><b>Open question.</b> ${esc(x.uncertainty)}</div>`:""}
+    ${rows?`<table><thead><tr><th style="width:38%">Proposed experiment</th><th>Why it is worth running</th><th class="num">Est. cost</th></tr></thead><tbody>${rows}</tbody></table>`:""}
+    ${tests.length?`<p class="muted"><b>Immediate action.</b> Run “${esc(tests[0].name)}” first — ${esc(lowerFirst((tests[0].why||"").replace(/\.$/,"")))}.</p>`:""}</section>`;
+}
+function secProvenance(){
+  const res=byType("result").map(m).filter(x=>x.provenance);
+  const log=state.run.log||[];
+  const pr=res.length?res[res.length-1].provenance:null;
+  const rows=pr?Object.keys(pr).map(k=>`<tr><th style="width:150px">${esc(k)}</th><td>${esc(pr[k])}</td></tr>`).join(""):"";
+  const logRows=log.map(e=>`<tr><td class="muted">${esc(e.time||"")}</td><td>${esc(e.agent||"")}</td><td>${esc(e.msg||"")}</td></tr>`).join("");
+  return `<section><h2>10 · Provenance and run record</h2>
+    ${rows?`<table>${rows}</table>`:"<p class='muted'>No run provenance recorded for this project.</p>"}
+    ${logRows?`<h3>Agent activity</h3><table><thead><tr><th style="width:74px">Time</th><th style="width:120px">Agent</th><th>Step</th></tr></thead><tbody>${logRows}</tbody></table>`
+      :`<p class="muted">No agent activity recorded in this session. Press Run on the graph to produce a live trace.</p>`}</section>`;
+}
+
+/* --- assembly --------------------------------------------------------- */
+/* The claim check is stated in the document itself, not just in a toast.
+   A reader has to be able to tell whether the prose was checked, and what
+   came out of it, from the paper alone. Removals are listed rather than
+   quietly dropped: what a fact-checker struck is itself a finding about the
+   draft, and hiding it would defeat the point of running the check. */
+function narrativeAudit(){
+  if(!NARRATIVE.verified){
+    return `<div class="callout warn"><b>Claim check did not run.</b> The drafted prose has
+      <b>not</b> been checked against the recorded data${NARRATIVE.verifyError?` (${esc(NARRATIVE.verifyError)})`:""}.
+      Treat the narrative sections as unverified and read them against the tables before circulating this report.</div>`;
+  }
+  const n=NARRATIVE.removed.length;
+  if(!n) return `<p class="byline-gen">A second adversarial pass re-read the draft against the recorded data and found no unsupported claim.</p>`;
+  const items=NARRATIVE.removed.map(x=>`<li><span class="muted">[${esc(x.section)}]</span>
+      “${esc(x.sentence)}” — ${esc(x.why||"not supported by the recorded data")}</li>`).join("");
+  return `<div class="callout"><b>Claim check: ${n} statement${n===1?"":"s"} removed.</b>
+    A second adversarial pass re-read the draft against the recorded data and struck the following,
+    which are <b>not</b> present in the report above:
+    <ul class="audit-list">${items}</ul></div>`;
+}
+
+function buildPaper(){
+  FIGN=0; TABN=0;   // numbering restarts for every assembly
+  const p=curProj(), q=m(firstOf("question")), d=curData(), r=projResults();
+  const when=new Date().toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
+  const author=AUTH.user?`${esc(AUTH.user)} (GitHub)`:"Unattributed session";
+  const mode=d.measured?"Verified sample data":"Illustrative placeholder data";
+  const runLabel=state.run.mode==="live"?"live run":(state.run.mode==="replay"?"replayed trace":"no run in this session");
+  const abstract=NARRATIVE.abstract||assembledAbstract();
+  const discussion=NARRATIVE.discussion||assembledDiscussion();
+  const limits=NARRATIVE.limitations||assembledLimitations();
+  const wrote=NARRATIVE.source==="model";
+
+  return `
+    <h1>${esc(p.name)} — computational screening report</h1>
+    <p class="p-lede">${esc((firstOf("question")&&firstOf("question").summary)||p.question||"")}</p>
+    <div class="p-meta">
+      <span><b>Prepared by</b> ${author}</span>
+      <span><b>Date</b> ${esc(when)}</span>
+      <span><b>Run</b> ${esc(p.run||"—")} · ${esc(runLabel)}</span>
+      <span><b>Data</b> ${esc(mode)}</span>
+    </div>
+
+    <section><h2>Abstract</h2>
+      <p>${esc(abstract)}</p>
+      ${wrote?`<p class="byline-gen">Abstract, discussion and limitations drafted by ${esc(NARRATIVE.model||"a language model")} from this project's recorded data. All numbers, figures, tables and references in this report are assembled from the run record, not written by the model.</p>`:""}
+      ${wrote?narrativeAudit():""}
+      ${(p.scaffolded&&!r)?`<div class="callout warn"><b>Plan-stage project.</b> This project's question, hypotheses and experiment design were proposed by a model as a starting point and have not been grounded in sources or tested by a run. Nothing below is a finding.</div>`:""}
+    </section>
+
+    ${secQuestion()}
+    ${secEvidence()}
+    ${secHypotheses()}
+    ${secMethods()}
+    ${secResults()}
+    ${secControls()}
+
+    <section><h2>7 · Discussion</h2>${discussion.split(/\n\n+/).map(x=>`<p>${esc(x)}</p>`).join("")}</section>
+    <section><h2>8 · Limitations</h2><p>${esc(limits)}</p></section>
+
+    ${secNext()}
+    ${secProvenance()}
+    ${secReferences()}
+
+    <footer class="p-foot">
+      Generated by Relay from the project graph on ${esc(when)}.
+      This is a computational triage report: it reprioritises candidates for assay and does not
+      confirm binding, efficacy or safety. ${d.measured?"":"Figures shown are illustrative placeholders."}
+    </footer>`;
+}
+
+function openReport(){
+  $("#paper").innerHTML=buildPaper();
+  $("#reportNote").textContent=NARRATIVE.source==="model"
+    ? `Narrative drafted by ${NARRATIVE.model||"model"}`
+    : "Assembled from the project graph";
+  $("#reportOv").classList.add("open");
+  document.body.style.overflow="hidden";
+  $("#reportOv").scrollTop=0;
+}
+function closeReport(){
+  $("#reportOv").classList.remove("open");
+  document.body.style.overflow="";
+}
+
+/* The browser's own print pipeline is the PDF writer: the charts are inline
+   SVG, so they come out as vector with selectable labels, which no
+   screenshot-based exporter would manage. */
+function exportPDF(){
+  toast("Choose “Save as PDF” as the destination");
+  setTimeout(()=>window.print(),260);
+}
+
+async function writeNarrative(){
+  if(!AUTH.user){ toast("Sign in to draft the narrative"); return; }
+  const btn=$("#reportWrite"); const label=btn.querySelector(".btn-label");
+  const was=label.textContent; label.textContent="Writing…"; btn.disabled=true;
+  try{
+    const r=await api("/api/narrative",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({project:curProj(),metrics:(curData().stats||[]),dataMode:state.dataMode})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){
+      // The assembled report is already complete, so a failure here is a
+      // declined upgrade, not a broken export.
+      toast(j.reason||"Narrative unavailable — keeping the assembled text");
+      return;
+    }
+    NARRATIVE.abstract=j.abstract||""; NARRATIVE.discussion=j.discussion||"";
+    NARRATIVE.limitations=j.limitations||""; NARRATIVE.source="model";
+    NARRATIVE.model=[j.provider,j.model].filter(Boolean).join(" · ");
+    NARRATIVE.verified=!!j.verified; NARRATIVE.verifyError=j.verifyError||null;
+    NARRATIVE.removed=Array.isArray(j.removed)?j.removed:[];
+    openReport();
+    const n=NARRATIVE.removed.length;
+    toast(!NARRATIVE.verified ? "Drafted, but the claim check did not run — review carefully"
+      : n ? `Drafted · ${n} unsupported claim${n===1?"":"s"} removed`
+          : "Drafted · claim check found nothing unsupported");
+  }catch(e){ toast("Could not reach the server — keeping the assembled text"); }
+  finally{ label.textContent=was; btn.disabled=false; }
+}
+
+$("#reportBtn").addEventListener("click",openReport);
+$("#reportClose").addEventListener("click",closeReport);
+$("#reportPrint").addEventListener("click",exportPDF);
+$("#reportWrite").addEventListener("click",writeNarrative);
+addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&$("#reportOv").classList.contains("open")){ e.preventDefault(); closeReport(); }
+});
+
 init();
 
 })();
