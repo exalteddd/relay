@@ -635,6 +635,10 @@ button{font-family:inherit;color:inherit;cursor:pointer}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/></svg>
             Fit
           </button>
+          <button class="pill-btn" id="tidyBtn" title="Arrange the graph left to right (T)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h6M3 12h6M3 18h6M15 4h6M15 12h6M15 20h6M9 6l6-2M9 12h6M9 18l6 2"/></svg>
+            Tidy
+          </button>
         </div>
 
         <div class="overlay cmdbar">
@@ -1181,6 +1185,7 @@ function wireNode(d,n){
 $("#zoomIn").addEventListener("click",()=>zoomBy(1.18));
 $("#zoomOut").addEventListener("click",()=>zoomBy(1/1.18));
 $("#fitBtn").addEventListener("click",()=>fit(true));
+$("#tidyBtn").addEventListener("click",()=>tidy());
 
 /* ============================== minimap =============================== */
 let mmT=null; function scheduleMinimap(){ if(mmT)cancelAnimationFrame(mmT); mmT=requestAnimationFrame(renderMinimap); }
@@ -1584,11 +1589,104 @@ $("#cmdSend").addEventListener("click",sendCmd);
 $("#cmdInput").addEventListener("keydown",e=>{ if(e.key==="Enter")sendCmd(); });
 
 /* ============================== add node ============================== */
+/* ============================ graph layout ============================
+   A research graph is a DAG that reads left to right: question → evidence →
+   hypotheses → experiment → result → next question. Laying it out in layers
+   by depth matches how people read it, and ordering each layer by the average
+   position of its neighbours removes most edge crossings without needing a
+   full crossing-minimisation pass. Hand-placed positions do not survive a run
+   that adds dozens of claim nodes, so this has to be one click away. */
+const LAYER_GAP=96, ROW_GAP=28;
+
+function layoutGraph(p){
+  const nodes=p.nodes, edges=p.edges||[];
+  if(!nodes.length) return;
+  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const out={}, indeg={};
+  for(const n of nodes){ out[n.id]=[]; indeg[n.id]=0; }
+  for(const e of edges){ if(byId[e.from]&&byId[e.to]&&e.from!==e.to){ out[e.from].push(e.to); indeg[e.to]++; } }
+
+  // Longest-path layering over a topological order, so every edge points
+  // forward. Any cycle leaves nodes unvisited; those get appended at the end
+  // rather than silently dropped.
+  const depth={}; const queue=nodes.filter(n=>!indeg[n.id]).map(n=>n.id);
+  for(const id of queue) depth[id]=0;
+  const pending={...indeg};
+  for(let i=0;i<queue.length;i++){
+    const id=queue[i];
+    for(const next of out[id]){
+      depth[next]=Math.max(depth[next]??0, depth[id]+1);
+      if(--pending[next]===0) queue.push(next);
+    }
+  }
+  let maxDepth=0;
+  for(const n of nodes){ if(depth[n.id]==null) depth[n.id]=null; else maxDepth=Math.max(maxDepth,depth[n.id]); }
+  for(const n of nodes) if(depth[n.id]==null) depth[n.id]=maxDepth+1;   // cycle remnants
+
+  const layers=[];
+  for(const n of nodes){ (layers[depth[n.id]] ||= []).push(n); }
+
+  // Order each layer by the mean row of its already-placed predecessors.
+  const row={};
+  layers.forEach((layer,li)=>{
+    if(!layer) return;
+    if(li>0) layer.sort((a,b)=>bary(a)-bary(b));
+    layer.forEach((n,i)=>{ row[n.id]=i; });
+    function bary(n){
+      const ins=edges.filter(e=>e.to===n.id&&row[e.from]!=null).map(e=>row[e.from]);
+      return ins.length ? ins.reduce((s,v)=>s+v,0)/ins.length : row[n.id] ?? 0;
+    }
+  });
+
+  const h=n=>{ const el=nodeEls[n.id]; return (el?el.offsetHeight:92); };
+
+  // A run can put thirty-odd claims at the same depth. Stacked in one column
+  // that is a four-thousand-pixel ribbon, so a wide layer wraps into several
+  // sub-columns. Depth order still reads left to right; only the within-layer
+  // packing changes.
+  const MAX_ROWS=6;
+  const groups=[];                                    // one entry per rendered column
+  for(const layer of layers){
+    if(!layer||!layer.length) continue;
+    const subs=Math.ceil(layer.length/MAX_ROWS), per=Math.ceil(layer.length/subs);
+    for(let s=0;s<subs;s++) groups.push(layer.slice(s*per,(s+1)*per));
+  }
+  const colH=groups.map(g=>g.reduce((s,n)=>s+h(n)+ROW_GAP,-ROW_GAP));
+  const tallest=Math.max(...colH,0);
+  groups.forEach((g,i)=>{
+    const x=i*(NODE_W+LAYER_GAP);
+    let y=(tallest-colH[i])/2;                        // centre each column
+    for(const n of g){ n.x=Math.round(x); n.y=Math.round(y); y+=h(n)+ROW_GAP; }
+  });
+}
+
+function tidy(){
+  layoutGraph(curProj());
+  renderGraph(); savePersist(); fit(true);
+  toast("Graph arranged");
+}
+
+/* Put a new node where it will not land on top of an existing one. */
+function freeSpot(x,y,nodes){
+  const clear=(px,py)=>!nodes.some(n=>Math.abs(n.x-px)<NODE_W+16 && Math.abs(n.y-py)<110);
+  if(clear(x,y)) return {x,y};
+  for(let ring=1; ring<=12; ring++){
+    for(const [dx,dy] of [[1,0],[0,1],[1,1],[-1,1],[1,-1],[-1,0],[0,-1],[-1,-1]]){
+      const px=x+dx*ring*(NODE_W+24), py=y+dy*ring*118;
+      if(clear(px,py)) return {x:px,y:py};
+    }
+  }
+  return {x:x+40,y:y+40};
+}
+
 function addNode(type,text){
   const p=curProj(); const r=canvasRect(); const c=screenToWorld(r.width/2, r.height/2);
   const id=type[0]+"-"+Math.random().toString(36).slice(2,6);
   const titleMap={question:"New question",source:"New evidence",hypothesis:"New hypothesis",experiment:"New experiment",result:"New result",note:"Note"};
-  const n=P(id,type,text?(text.length>42?text.slice(0,40)+"…":text):titleMap[type], text?"":"", type==="experiment"?"planned":"done", Math.round(c.x-NODE_W/2), Math.round(c.y-40), type==="note"?{text:text||""}:{});
+  // Centre of the viewport, nudged to the nearest clear space so repeated
+  // adds do not stack exactly on top of one another.
+  const at=freeSpot(Math.round(c.x-NODE_W/2), Math.round(c.y-40), p.nodes);
+  const n=P(id,type,text?(text.length>42?text.slice(0,40)+"…":text):titleMap[type], text?"":"", type==="experiment"?"planned":"done", at.x, at.y, type==="note"?{text:text||""}:{});
   p.nodes.push(n);
   if(state.selection){ p.edges.push({from:state.selection,to:id,rel:type==="source"?"uses":(type==="hypothesis"?"supports":"uses")}); }
   renderGraph(); selectNode(id); savePersist();
@@ -1913,6 +2011,7 @@ document.addEventListener("keydown",e=>{
     if(state.pane.open){ const s=state.selection; closePane(); if(s&&nodeEls[s])nodeEls[s].focus(); return; }
   }
   if((e.key==="f"||e.key==="F")&&!e.target.matches("input,textarea")){ fit(true); }
+  if((e.key==="t"||e.key==="T")&&!e.target.matches("input,textarea")){ tidy(); }
 });
 
 /* ========================= responsive nav =========================== */
