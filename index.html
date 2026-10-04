@@ -2364,8 +2364,15 @@ function wireSharpen(root,field){
     try{
       const r=await api("/api/refine-question",{method:"POST",
         headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})});
-      const j=await r.json();
-      if(!r.ok){ out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(j.error||"Could not sharpen this")}</div></div>`; return; }
+      // Report what actually happened. A single catch-all message sent
+      // people hunting for a network fault when the server had answered.
+      let j=null, raw="";
+      try{ j=await r.clone().json(); }catch(e){ raw=(await r.text()).slice(0,120); }
+      if(!r.ok||!j){
+        const why=(j&&j.error) || raw || `${r.status} ${r.statusText}`;
+        out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">${esc(why)}</div></div>`;
+        return;
+      }
       out.innerHTML=`
         <div class="sharpen">
           ${j.tooBroad?`<div class="sharpen-flag">This is broad enough that no single run could answer it.</div>`:""}
@@ -2382,7 +2389,7 @@ function wireSharpen(root,field){
       });
       out.querySelector("#keepMine").addEventListener("click",()=>{ out.hidden=true; out.innerHTML=""; });
     }catch(e){
-      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">Could not reach the model.</div></div>`;
+      out.innerHTML=`<div class="sharpen"><div class="sharpen-wait">The request never completed: ${esc(e.message||String(e))}. Is the server still running?</div></div>`;
     }finally{ btn.disabled=false; btn.textContent="Sharpen with AI"; }
   });
 }
