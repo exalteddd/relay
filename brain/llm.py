@@ -31,14 +31,20 @@ class LLM:
         self.usage = {"calls": 0, "input_tokens": 0, "output_tokens": 0}
         self._lock = threading.Lock()
         if self.provider == "anthropic":
-            import anthropic
             if not cfg.anthropic_api_key:
                 raise RuntimeError("Set ANTHROPIC_API_KEY (or BRAIN_PROVIDER=openai / mock).")
+            try:
+                import anthropic
+            except ImportError as exc:
+                raise RuntimeError("Anthropic support is missing on this server. Install requirements-server.txt and redeploy.") from exc
             self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
         elif self.provider == "openai":
-            import openai
             if not cfg.openai_api_key:
                 raise RuntimeError("Set OPENAI_API_KEY (or DATABRICKS_TOKEN for Model Serving).")
+            try:
+                import openai
+            except ImportError as exc:
+                raise RuntimeError("OpenAI support is missing on this server. Install requirements-server.txt and redeploy.") from exc
             self.client = openai.OpenAI(api_key=cfg.openai_api_key, base_url=cfg.openai_base_url)
             # Endpoints disagree on these two. Probed on first call, then reused:
             # current OpenAI reasoning models require max_completion_tokens, while

@@ -3631,15 +3631,21 @@ async function runViaBackend(expId,runId){
     // is running, so put the label back.
     state.run.waits=0;
     $("#runTxt").textContent="Running";
-    if(!res.ok||!res.body) throw new Error("no stream");
+    if(!res.ok){
+      const j=await res.json().catch(()=>({}));
+      throw new Error(j.error||j.reason||`Server returned ${res.status}`);
+    }
+    if(!res.body) throw new Error("The server did not return a run stream");
     const reader=res.body.getReader(); const dec=new TextDecoder(); let buf="";
     while(true){ const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
       let idx; while((idx=buf.indexOf("\n\n"))>=0){ const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
         const line=chunk.split("\n").find(l=>l.startsWith("data:")); if(!line)continue;
-        try{ applyBackendEvent(JSON.parse(line.slice(5).trim()),expId,runId); }catch(e){}
+        let event;
+        try{ event=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+        applyBackendEvent(event,expId,runId);
       }
     }
-    finishRun(expId,runId);
+    if(state.run.active) runUnavailable(expId,runId,"The server closed the stream before the run finished. Please retry.");
   }catch(e){
     // A dropped stream is a failed run, not a cue to play something canned.
     if(state.run.active) runUnavailable(expId,runId,`The run stopped: ${e.message||e}`);

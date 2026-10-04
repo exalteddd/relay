@@ -47,7 +47,10 @@ class Config:
 
 def load_config() -> Config:
     _load_dotenv(Path.cwd() / ".env")
-    provider = os.getenv("BRAIN_PROVIDER", "anthropic").lower()
+    # Explicit selection wins. Otherwise follow the credentials actually supplied.
+    provider = (os.getenv("BRAIN_PROVIDER") or "").strip().lower()
+    if not provider:
+        provider = "openai" if (os.getenv("OPENAI_API_KEY") or os.getenv("DATABRICKS_TOKEN")) else "anthropic"
     # (strong model, fast model). Strong handles planning, synthesis, hypotheses
     # and critique; fast handles the bulk screening and extraction passes.
     defaults = {

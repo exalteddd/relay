@@ -449,6 +449,8 @@ def run():
     if not may_run(user):
         if user is None:
             return jsonify(error="Sign in with GitHub to start a run", loginUrl="/auth/login"), 401
+        if not IS_DEV and not ALLOWED:
+            return jsonify(error="Runs are disabled: the server administrator must set RELAY_ALLOWED_USERS to the approved GitHub usernames in Render."), 403
         return jsonify(error=f"{user} is not on this server's allowlist"), 403
 
     # The global cap is sized for saved graphs; a run request is a question
