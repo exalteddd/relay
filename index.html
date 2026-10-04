@@ -757,7 +757,7 @@ button.brand:hover .wordmark{color:var(--accent-strong)}
             <button class="plus-btn" id="cmdPlus" title="Add a node" aria-label="Add a node" aria-haspopup="menu">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
-            <input id="cmdInput" placeholder="What is this project asking?" autocomplete="off" aria-label="This project's research question">
+            <input id="cmdInput" placeholder="Ask a research question and run it…" autocomplete="off" aria-label="This project's research question">
             <button class="send-btn" id="cmdSend" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
             </button>
@@ -1797,23 +1797,34 @@ function syncQuestionBar(){
   const q=questionNode();
   inp.value = q ? (q.meta.objective||q.summary||q.title||"") : (state.question||"");
 }
-function sendCmd(){
+async function sendCmd(){
   const inp=$("#cmdInput"); const t=inp.value.trim();
-  if(!t){ toast("Type the question this project is asking"); return; }
+  if(!t){ toast("Type a research question"); return; }
+  // Asking is the whole gesture: the question is recorded on the graph and
+  // the run it implies is offered straight away. Previously this only edited
+  // a field, which is not what "ask" means.
   state.question=t;
   let q=questionNode();
-  if(q){
-    q.meta=Object.assign({},q.meta,{objective:t});
-    q.summary=t; q.title="Research question";
-    toast("Question updated");
-  }else{
+  if(q){ q.meta=Object.assign({},q.meta,{objective:t}); q.summary=t; q.title="Research question"; }
+  else{
     q=P("q-"+Math.random().toString(36).slice(2,6),"question","Research question",t,"done",0,0,{objective:t});
     q.origin="user"; curProj().nodes.push(q);
-    toast("Question added to the graph");
   }
   renderGraph();
   if(state.selection===q.id){ renderPaneHeader(q); renderPaneBody(q); }
   renderCmdCtx(); savePersist();
+
+  if(state.run.active){ toast("Question updated — it applies to the next run"); return; }
+
+  // The question decides the engine; the approval dialog is still the gate.
+  let mode="literature", why="";
+  try{
+    const r=await api("/api/resolve?q="+encodeURIComponent(t));
+    if(r.ok){ const j=await r.json(); mode=j.mode; why=j.why||""; }
+  }catch(e){}
+  const expId=curProj().primaryExp;
+  if(mode==="screen"&&expId&&nodeById(expId)) openRunModal(expId);
+  else openResearchModal(why);
 }
 $("#cmdSend").addEventListener("click",sendCmd);
 $("#cmdPlus").addEventListener("click",e=>{ e.stopPropagation(); openAddNodeMenu($("#cmdPlus")); });
@@ -2295,7 +2306,7 @@ function updateProvenance(){
   el.provenance.dataset.kind = state.run.active
     ? (state.run.mode==="live"?"live":"replay")
     : (showingMeasured?"live":"sample");
-  if(state.run.active){ el.provText.textContent = state.run.mode==="live"?"Live Omnigent run":"Replaying trace"; el.provTextLong.textContent=""; }
+  if(state.run.active){ el.provText.textContent="Running"; el.provTextLong.textContent=""; }
   else { el.provText.textContent = showingMeasured?"Measured run":"Sample data"; el.provTextLong.textContent="· "+d.tag; }
 }
 /* One add-node menu, opened from the toolbar or the plus in the ask bar. */
@@ -2691,15 +2702,16 @@ async function startRun(expId){
   state.run.active=true; state.run.log=[]; state.run.id++;
   const runId="r-"+String(state.run.id).padStart(2,"0");
   const live=await hasBackend();
-  state.run.mode=live?"live":"replay";
+  state.run.mode="live";
   updateProvenance();
-  el.runbar.hidden=false; $("#runTxt").textContent=live?"Live Omnigent run":"Replaying trace";
+  el.runbar.hidden=false; $("#runTxt").textContent="Running";
   $("#runSub").textContent="· "+runId;
   if(expId) setStatus(expId,"running");
   // open the result node's Activity tab so events stream where the user can watch
   const resId=curProj().resultNode;
   if(resId){ selectNode(resId); const rn=nodeById(resId); rn._tab="activity"; renderPaneBody(rn); }
-  if(live) runViaBackend(expId,runId); else runReplay(expId,runId);
+  if(live) runViaBackend(expId,runId);
+  else runUnavailable(expId,runId,"No server is reachable from this page, so there is nothing to run.");
 }
 /* ================================ auth ================================
    The sidebar chip reflects the real session. On a static host (no backend)
@@ -2833,30 +2845,14 @@ function finishRun(expId,runId,aborted){
   const sel=state.selection?nodeById(state.selection):null; if(sel&&sel.type==="result"){ renderPaneBody(sel); }
   if(state.opts&&state.opts.autoTidy) setTimeout(()=>tidy(),250);
 }
-function runReplay(expId,runId){
-  const pid=curProj().id;
-  const steps = pid==="ndm1" ? [
-    [300, ()=>logEvent({agent:"Omnigent (PI)",msg:"Approved r-03 · dispatching sub-agents",st:"done"})],
-    [700, ()=>{logEvent({agent:"Literature",msg:"Scanning sources for NDM-1 inhibitor priors…",st:"running"}); runSub("literature");}],
-    [1700,()=>logEvent({agent:"Literature",msg:"12 sources scanned · 3 chelation-warhead claims grounded",st:"done"})],
-    [1900,()=>{logEvent({agent:"Extractor",msg:"Building labelled fixture (scaffold split)…",st:"running"}); runSub("extractor");}],
-    [2800,()=>{logEvent({agent:"Extractor",msg:"RDKit fingerprints + Bemis–Murcko scaffolds ready",st:"done"}); setStatus("hA","done"); setStatus("hB","done");}],
-    [3100,()=>{logEvent({agent:"Hypothesizer",msg:"Diversity-aware screen ranked above potency-only",st:"done"}); runSub("hypothesizer");}],
-    [3400,()=>{logEvent({agent:"Screener",msg:"Random-forest rank over candidate pool…",st:"running"}); runSub("screener");}],
-    [4600,()=>{logEvent({agent:"Screener",msg:"Enrichment 11.3× @ top 1% · 5 candidates advanced",st:"done"}); setStatus("rank","done"); pulse("rank");}],
-    [5000,()=>{logEvent({agent:"Critic",msg:"Controls clean · random 1.05× · y-scramble AUC 0.52",st:"done"}); runSub("critic");}],
-    [5600,()=>finishRun(expId,runId)]
-  ] : [
-    [300, ()=>logEvent({agent:"Omnigent (PI)",msg:`Approved ${runId} · dispatching sub-agents`,st:"done"})],
-    [800, ()=>logEvent({agent:"Literature",msg:"Gathering evidence…",st:"running"})],
-    [1700,()=>{logEvent({agent:"Literature",msg:"Evidence grounded",st:"done"}); nodeFirstHyp();}],
-    [2100,()=>logEvent({agent:"Screener",msg:"Ranking candidates…",st:"running"})],
-    [3300,()=>logEvent({agent:"Screener",msg:"Ranking complete",st:"done"})],
-    [3700,()=>{logEvent({agent:"Critic",msg:"Controls checked",st:"done"}); finishRun(expId,runId);}]
-  ];
-  state.run.timers.forEach(clearTimeout); state.run.timers=[];
-  const t0=Date.now();
-  for(const [dt,fn] of steps){ state.run.timers.push(setTimeout(()=>{ if(state.run.active||dt<100) fn(); updateRunSub(Date.now()-t0); },reduceMotion?Math.min(dt,400):dt)); }
+/* There is no replay. A recorded trace was theatre left over from the demo
+   build: it played fixed messages and fixed numbers whether or not anything
+   ran. If the backend cannot be reached, the honest outcome is to say so. */
+function runUnavailable(expId,runId,why){
+  logEvent({agent:"Relay",msg:why,st:"failed"});
+  if(expId) setStatus(expId,"planned");
+  finishRun(expId,runId,true);
+  toast(why);
 }
 function nodeFirstHyp(){ const h=curProj().nodes.find(n=>n.type==="hypothesis"); if(h)setStatus(h.id,"done"); }
 function runSub(name){ /* placeholder for sub-agent markers if needed */ }
@@ -2909,8 +2905,9 @@ async function runViaBackend(expId,runId){
       }
     }
     finishRun(expId,runId);
-  }catch(e){ // fall back to replay if the live stream drops
-    if(state.run.active){ logEvent({agent:"Relay",msg:"Live stream unavailable — replaying labelled trace",st:"failed"}); state.run.mode="replay"; updateProvenance(); $("#runTxt").textContent="Replaying trace"; runReplay(expId,runId); }
+  }catch(e){
+    // A dropped stream is a failed run, not a cue to play something canned.
+    if(state.run.active) runUnavailable(expId,runId,`The run stopped: ${e.message||e}`);
   }
 }
 function applyBackendEvent(ev,expId,runId){
