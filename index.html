@@ -2808,7 +2808,7 @@ $("#crumb").addEventListener("click",()=>{
     <div style="padding:4px 10px 8px;font-size:12px;color:var(--ink-2);line-height:1.45">Viewing the public demo. <b>Sign in</b> to keep your own projects.</div>`:"");
   openMenu($("#crumb"),`<div class="m-head">Switch project</div>${items}${actions}`,m=>{
     $$("[data-pid]",m).forEach(b=>b.addEventListener("click",()=>{switchProject(b.dataset.pid);}));
-    const nb=$("[data-act='new']",m); if(nb) nb.addEventListener("click",()=>{closeMenus();createProject();});
+    const nb=$("[data-act='new']",m); if(nb) nb.addEventListener("click",()=>{closeMenus();openProjectForm();});
     const db=$("[data-act='del']",m); if(db) db.addEventListener("click",()=>{closeMenus();deleteCurrentProject();});
   });
 });
@@ -2843,38 +2843,6 @@ function blankGraph(name,question){
       {from:"hB",to:"exp",rel:"tests"},{from:"exp",to:"res",rel:"produced"},
       {from:"res",to:"next",rel:"uses"}]
   };
-}
-
-async function createProject(){
-  const name=(prompt("Name the new project","Untitled project")||"").trim();
-  if(!name) return;
-  const question=(prompt("What question should this project answer?\n\nLeave blank to start from an empty graph.","")||"").trim();
-
-  // Ask the backend to design the opening plan for *this* topic. Everything
-  // it proposes lands on editable nodes, so the user reads and corrects it
-  // before any of it can reach an exported paper.
-  let doc=null;
-  if(question){
-    toast("Designing the research plan…");
-    try{
-      const r=await api("/api/scaffold",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name,question})});
-      const j=await r.json().catch(()=>({}));
-      if(r.ok&&j.ok&&j.doc) doc=j.doc;
-      else toast(j.reason||"Scaffolding unavailable — starting from an empty graph");
-    }catch(e){ toast("Offline — starting from an empty graph"); }
-  }
-  if(!doc) doc=blankGraph(name,question);
-
-  try{
-    const r=await api("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({doc})});
-    if(!r.ok){ const j=await r.json().catch(()=>({})); toast(j.error||"Could not create project"); return; }
-    const j=await r.json();
-    state.projects[j.id]=doc; PROJECT_ORDER.push(j.id);
-    renderProjects(); switchProject(j.id);
-    toast(`Created “${name}”`);
-  }catch(e){ toast("Offline — could not create project"); }
 }
 
 async function deleteCurrentProject(){
@@ -2974,15 +2942,43 @@ function openAddNodeMenu(anchor){
 
 
 /* ============================== projects =============================== */
-function createProject(name,question){
-  const id="p-"+Math.random().toString(36).slice(2,7);
-  const q=P("q-"+id,"question","Research question",question,"done",0,0,{objective:question});
-  q.origin="user";
-  const proj={id,name,icon:"flask",run:"No runs yet",primaryExp:null,resultNode:null,nodes:[q],edges:[]};
-  state.projects[id]=proj; PROJECT_ORDER.push(id);
-  state.deletedProjects=(state.deletedProjects||[]).filter(x=>x!==id);
-  renderProjects(); switchProject(id); savePersist();
-  toast(`Created “${name}”`);
+/* One way to make a project, from the form that collects the topic.
+   The backend designs the opening plan for THAT topic -- cloning the demo
+   instead, as this used to, handed every new project NDM-1's content. What
+   comes back lands on editable nodes, never straight into a paper: it is a
+   plan to correct, not a finding to cite. */
+async function createProject(name,question){
+  let doc=null;
+  if(question&&ACCOUNT.mode==="user"){
+    toast("Designing the research plan…");
+    try{
+      const r=await api("/api/scaffold",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name,question})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.ok&&j.doc) doc=j.doc;
+      else toast(j.reason||"Scaffolding unavailable — starting from the question alone");
+    }catch(e){ toast("Offline — starting from the question alone"); }
+  }
+  if(!doc) doc=blankGraph(name,question);
+
+  // Without an account there is nowhere on the server to put it, so the
+  // project stays in this browser rather than being silently discarded.
+  if(ACCOUNT.mode!=="user"){
+    const id=doc.id||("p-"+Math.random().toString(36).slice(2,7));
+    doc.id=id; state.projects[id]=doc; PROJECT_ORDER.push(id);
+    state.deletedProjects=(state.deletedProjects||[]).filter(x=>x!==id);
+    renderProjects(); switchProject(id); savePersist();
+    toast(`Created “${name}”`); return;
+  }
+  try{
+    const r=await api("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({doc})});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); toast(j.error||"Could not create project"); return; }
+    const j=await r.json();
+    doc.id=j.id; state.projects[j.id]=doc; PROJECT_ORDER.push(j.id);
+    renderProjects(); switchProject(j.id);
+    toast(`Created “${name}”`);
+  }catch(e){ toast("Offline — could not create project"); }
 }
 
 function openProjectForm(){
