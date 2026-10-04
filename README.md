@@ -1,4 +1,6 @@
-# Relay
+# relay
+
+**Live site:** [relay on Render](https://relay-h0l5.onrender.com/) · [Open the workspace](https://relay-h0l5.onrender.com/workspace)
 
 **Ask a health research question. Watch the lab work on it.**
 
@@ -154,3 +156,8 @@ _Add team member names here._
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Team
+
+- **Michael Karabinosh** — Full Stack
+- **Clinton Adorsoo**
