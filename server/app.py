@@ -289,4 +289,8 @@ def static_files(filename):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8000"))
     print(f"Relay on http://localhost:{port}  (engine: {engine_available()}, auth: {AUTH_CONFIGURED})")
-    app.run(host="0.0.0.0", port=port, threaded=True)
+    # Localhost only by default: the dev server has no TLS and relaxed cookie
+    # rules, so it should not be reachable from the rest of the network.
+    # Set RELAY_HOST=0.0.0.0 deliberately if you need to reach it from a phone.
+    host = os.environ.get("RELAY_HOST", "127.0.0.1")
+    app.run(host=host, port=port, threaded=True)
